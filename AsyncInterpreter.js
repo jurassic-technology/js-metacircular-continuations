@@ -1,14 +1,20 @@
-export default function getAsyncInterpreter (AsyncScope, parser) {
+export default function getAsyncInterpreter (get, set, scope, unscope, parse) {
 
   class AsyncInterp extends AsyncScope {
 
-    constructor (code, parent) {
-      super(parent) 
+    constructor (code) {
 
-      if (typeof code === 'string') this.ast = parser(code) 
+      this.get = get
+      this.set = set
+      this.scope = scope
+      this.unscope = unscope
+      this.parse = parse 
+
+      if (typeof code === 'string') this.ast = parse(code)
       else this.ast = code 
-      if (this.ast.id) this.declare(this.ast.id.name, this) 
 
+      if (this.ast.id) set(this.ast.id.name, this) 
+        
       this.this = undefined
 
     } 
@@ -23,29 +29,36 @@ export default function getAsyncInterpreter (AsyncScope, parser) {
 
     } 
 
-    interpret (args) {
-
-      const interpreting = new AsyncInterpreter(this.ast, this.parent) 
-      interpreting.boundedArgs = this.boundedArgs
-      interpreting.this = this.this
-      return interpreting.execute(args, prevCont, prevErrCont) 
-
-    }
-
     execute (args, prevCont, prevErrCont) {
+
+      this.scope() 
 
       const argsObject = new Object
       const iterateArgs = this.boundedArgs.concat(args) 
+
       for (var i = 0; i < iterateArgs.length; i++) {
-        if  (this.ast.params[i]) this.declare(this.ast.params[i].name, iterateArgs[i])
+        if (this.ast.params[i]) this.set(this.ast.params[i].name, iterateArgs[i])
         argumentsObject[i] = iterateArgs[i]
       } 
 
       Object.defineProperty(argsObject, 'length', { value: iterateArgs.length, configurable: false }) 
       Object.defineProperty(argsObject, 'callee', { value: this.callee, configurable: false }) 
-      this.decalre('arguments', argumentsObj) 
+      this.set('arguments', argumentsObj) 
 
-      return this.i(this.ast.body, prevCont, prevErrCont) 
+      const execution = new AsyncInterpreter(this.ast) 
+      execution.boundedArgs = this.boundedArgs
+      execution.this = this.this 
+      return execution.i(execution.ast.body, nextContUnscope.bind(execution), nextErrContUnscope.bind(execution)) 
+
+      function nextContUnscope () {
+        this.unscope()
+        return prevCont.apply(this, arguments) 
+      }
+
+      function nextErrContUnscope () {
+        this.unscope()
+        return prevErrCont.apply(this, arguments) 
+      }
 
     }
 
@@ -59,24 +72,28 @@ export default function getAsyncInterpreter (AsyncScope, parser) {
     get callee () { return this._callee } 
 
     call () {
+
       const prevThis = this.this
       this.this = arguments[0]
-      const result = this.execute.apply(this, Array.prototype.slice.call(arguments, 1))  
+      const result = this.interpret.apply(this, Array.prototype.slice.call(arguments, 1))  
       this.this = prevThis
       return result
+
     }
 
     apply () {
+
       const prevThis = this.this
       this.this = arguments[0] 
-      const result = this.execute.apply(this, arguments[1]) 
+      const result = this.interpret.apply(this, arguments[1]) 
       this.this = prevThis 
       return result 
+
     }
    
     bind () { 
 
-      const interp = new AsyncInterp(this.ast, this.parennt) 
+      const interp = new AsyncInterp(this.ast) 
       interp.this = arguments[0]
       interp.boundedArgs = Array.prototype.slice.call(arguments, 1) 
       interp.callee = this

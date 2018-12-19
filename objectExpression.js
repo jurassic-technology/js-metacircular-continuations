@@ -15,7 +15,7 @@ module.exports = function interpretObjectExpression (node, prevCont, prevErrCont
       if (prop.type === 'ObjectMethod') {
 
           const descriptor = { configurable: true }
-          descriptor[ prop.kind ] = function () { return el } 
+          descriptor[ prop.kind ] = el
           Object.defineProperty(obj, self.properties[i].key.name, descriptor) 
 
       } else {

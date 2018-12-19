@@ -7,7 +7,7 @@ module.exports = function interpretObjectProperty (node, prevCont, prevErrCont) 
 
   function nextContKey (key) {
     rv.push(key)
-    return self.i(node.value, 
+    return self.i(node.value, nextContValue, prevErrCont) 
   }
 
   function nextContValue (value) {
