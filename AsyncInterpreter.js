@@ -37,16 +37,22 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
     execute (args, previousContinuation, previousErrorContinuation) {
 
       const argsObject = new Object
-      const iterateArgs = this.boundedArgs.concat(args) 
+      const iterateArgs = args 
+        ? this.boundedArgs
+          ? this.boundedArgs.concat(args)
+          : args
+        : this.boundedArgs
+          ? this.boundedArgs
+          : new Array
 
       for (var i = 0; i < iterateArgs.length; i++) {
         if (this.ast.params[i]) this.set(this.ast.params[i].name, iterateArgs[i])
         argumentsObject[i] = iterateArgs[i]
       } 
 
-      Object.defineProperty(argsObject, 'length', { value: iterateArgs.length, configurable: false }) 
-      Object.defineProperty(argsObject, 'callee', { value: this.callee, configurable: false }) 
-      this.set('arguments', argumentsObj) 
+      Object.defineProperty(argsObject, 'length', { value: iterateArgs.length, enumerable: false }) 
+      Object.defineProperty(argsObject, 'callee', { value: this.callee, enumerable: false }) 
+      this.set('arguments', argsObject) 
 
       const execution = new AsyncInterpreter(this.ast) 
       execution.boundedArgs = this.boundedArgs
@@ -183,7 +189,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
           case 'UnaryExpression':
             return this.unaryExpression(node, previousContinuation, previousErrorContinuation)
           case 'MemberExpression':
-            return this.memberExpression(node, previousConntinuation, previousErrorContinuation)
+            return this.memberExpression(node, previousContinuation, previousErrorContinuation)
           case 'ThisExpression':
             return this.thisExpression(node, previousContinuation, previousErrorContinuation)
           case 'StringLiteral':
@@ -193,9 +199,11 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
           case 'ObjectExpression':
             return this.objectExpression(node, previousContinuation, previousErrorContinuation)
           case 'ObjectProperty':
-            return this.objectProperty(node,previousContinuation, previousErrorContinuation) 
+            return this.objectProperty(node, previousContinuation, previousErrorContinuation) 
+          case 'ObjectMethod':
+            return this.objectMethod(node, previousContinuation, previousErrorContinuation) 
           case 'ArrayExpression':
-            return this.iNodeArray(node.elements, previousContinuation, previousErrorContinuation)
+            return this.arrayExpression(node, previousContinuation, previousErrorContinuation)
           case 'VariableDeclaration':
             return this.variableDeclaration(node, previousContinuation, previousErrorContinuation)
           case 'VariableDeclarator':
@@ -211,6 +219,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     assignmentExpression (node, previousContinuation, previousErrorContinuation) {
 
+      const self = this
       let rightVal
 
       return this.interpret(node.right, nextContRight, previousErrorContinuation) 
@@ -219,9 +228,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
         rightVal = right
         if (node.operator === '=') {
-          return this.setValue(node.left, right, previousContinuation, previousErrorContinuation) 
+          return self.setValue(node.left, right, previousContinuation, previousErrorContinuation) 
         } else {
-          return this.interpret(node.left, nextContLeft, previousErrorContinuation) 
+          return self.interpret(node.left, nextContLeft, previousErrorContinuation) 
         }   
 
       }
@@ -274,7 +283,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     blockStatement (node, previousContinuation, previousErrorContinuation) {
 
-      return this.iNodeArray(node.body, nextCont, nextErrCont)
+      return this.interpretNodeArray(node.body, nextCont, nextErrCont)
 
       function nextCont (results) {
 
@@ -693,59 +702,40 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
    memberExpression (node, previousContinuation, previousErrorContinuation) {
 
       const self = this
-      let obj
+      let property
 
-      return this.interpret(node.object, nextContObject, previousErrorContinuation)
+      if (node.computed) return this.interpret(node.property, nextContinuationProperty, previousErrorContinuation) 
+      else if (!node.computed) return this.interpret(node.object, nextContinuationObject, previousErrorContinuation) 
+      
+      function nextContinuationProperty (property) {
+        property = prop
+        return self.interpret(node.object, nextContinuationObject, previousErrorContinuation) 
+      } 
 
-      function nextContObject (object) {
+      function nextContinuationObject (object) {
 
-        let val
-        obj = object
-
-        if (node.property.type === 'Identifier') {
-
-          const descriptor = Object.getOwnPropertyDescriptor(obj, node.property.name)
-
-          if (descriptor.get) {
-
-            val = new Promise(function (resolve, reject) {
-              return descriptor.get.execute(undefined, resolve, reject)
-            })
-
-          } else {
-
-            val = object[ self.property.name ]
-
-          }
-
-          return this.resolveValue(val, nextContResolveVal, previousErrorContinuation)
-
-        } else {
-
-          return self.interpret(node.property, nextContComputed, previousErrorContinuation)
-
-        }
-
-      }
-
-      function nextContComputed (propertyName) {
-
-        let val
-        const descriptor = Object.getOwnPropertyDescriptor(obj, propertyName)
+        const descriptor = Object.getOwnPropertyDescriptor(object, node.property.name)
 
         if (descriptor.get) {
-
+          const method = descriptor.get()
+          console.log('method', method)
+          return method.execute(undefined, nextContinuationGetterMethod, previousErrorContinuation)
         } else {
-          val = obj[ propertyName ]
-        }
-
-        return resolveValue(val, nextContResolveVal, previousErrorContinuation)
+          return self.resolveValue(descriptor.value, nextContinuationResolveValue, previousErrorContinuation)
+        } 
 
       }
 
-      function nextContResolveVal (value) {
 
-        return previousContinuation(value, obj, self.property.name)
+      function nextContinuationGetterMethod (value) {
+
+        return self.resolveValue(value, nextContinuationResolveValue, previousErrorContinuation) 
+
+      } 
+
+      function nextContinuationResolveValue (value) {
+
+        return previousContinuation(value)
 
       }
 
@@ -780,7 +770,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
               el.this = object
               const descriptor = { configurable: true }
-              descriptor[ prop.kind ] = el
+              descriptor[ prop.kind ] = function returnMethod () { return el }
               properties[ key ] = descriptor 
 
           } else {
@@ -801,7 +791,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
     } 
 
     objectMethod(node, previousContinuation, previousErrorContinuation) {
-      const method = this.spawn(node) 
+      const method = this.spawn(node, this) 
       return previousContinuation(method) 
     }
 
@@ -1205,6 +1195,45 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       
     } 
 
+
+    setValue (node, value, previousContinuation, previousErrorContinuation) {
+
+      const self = this
+
+      if (node.type === 'Identifier') {
+
+        var success = this.set(node.name, value)
+        if (!success) return previousErrorContinuation("ReferenceError", new ReferenceError())
+        else return previousContinuation(value)
+
+      } else if (node.type === 'MemberExpression') {
+
+        var propertyName = node.computed ? node.property.value : node.property.name
+
+        return this.interpret(node.object, nextContinuationObject, previousErrorContinuation)
+
+        function nextContinuationObject (object) {
+
+          const descriptor = Object.getOwnPropertyDescriptor(object, propertyName)
+
+          if (descriptor && descriptor.set)  {
+
+            const methodScope = descriptor.set
+            const promise = new Promise(function (resolve, reject) { 
+              return methodScope.interpret(value, resolve, reject) 
+            })
+
+            return this.resolveValue(promise)
+
+          } else {
+
+            object[propertyName] = value
+            return self.resolveValue(value, previousContinuation, previousErrorContinuation)
+
+          }
+        }
+      }
+    }
 
   }
 

@@ -53,7 +53,7 @@ it('Basic variable assignemnt works', function (done) {
   })
 })
 
-it.only('Variable assignemnt to an object works', function (done) {
+it('Variable assignemnt to an object works', function (done) {
 
   new AsyncInterpreter(
     'var a = { a: 1, b: 2, c: 3 }; a '
