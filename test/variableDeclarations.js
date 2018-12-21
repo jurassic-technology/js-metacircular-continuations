@@ -1,9 +1,13 @@
 
+const commons = require('./commons') 
+const AsyncInterpreter = commons.AsyncInterpreter
+const expect = commons.expect
+
 it('should understand to assign undefined to a variable', function(done) {
 
-  interpret(
+  new AsyncInterpreter(
     ' var a = undefined; a; '
-  ).then(function (value) {
+  ).evaluate().then(function (value) {
     expect(value).to.equal(undefined)
     done()
   }).catch(function (err) {
@@ -14,9 +18,9 @@ it('should understand to assign undefined to a variable', function(done) {
 
 it('Variable declaration with many declarators succeeds', function (done) {
 
-  interpret(
+  new AsyncInterpreter(
     ' var a, b; "" + a + b '
-  ).then(function(value) {
+  ).evaluate().then(function(value) {
     expect(value).to.equal('undefinedundefined')
     done()
   }).catch(function(err) {
@@ -27,9 +31,9 @@ it('Variable declaration with many declarators succeeds', function (done) {
 
 it('Variable declaration succeeds', function (done) {
 
-  interpret(
+  new AsyncInterpreter(
     ' var a; a '
-  ).then(function (value) {
+  ).evaluate().then(function (value) {
   expect(value).to.be.undefined
     done()
   }).catch(function (err) {
@@ -39,9 +43,9 @@ it('Variable declaration succeeds', function (done) {
 })
 
 it('Basic variable assignemnt works', function (done) {
-  interpret(
+  new AsyncInterpreter(
     ' var a = 5; a'
-  ).then(function (value) {
+  ).evaluate().then(function (value) {
     expect(value).to.equal(5)
     done()
   }).catch(function (err) {
@@ -49,11 +53,11 @@ it('Basic variable assignemnt works', function (done) {
   })
 })
 
-it('Variable assignemnt to an object works', function (done) {
+it.only('Variable assignemnt to an object works', function (done) {
 
-  interpret(
+  new AsyncInterpreter(
     'var a = { a: 1, b: 2, c: 3 }; a '
-  ).then(function (value) {
+  ).evaluate().then(function (value) {
     expect(value).to.deep.equal({ a: 1, b: 2, c: 3 })
     done()
   }).catch(function (err) {
@@ -64,9 +68,9 @@ it('Variable assignemnt to an object works', function (done) {
 
 it('Variable assignment should evaluate undefined back into the console', function (done) {
 
-  interpret(
+  new AsyncInterpreter(
     'var a = 5; '
-  ).then(function (value) {
+  ).evaluate().then(function (value) {
     expect(value).to.equal(undefined)
     done()
   }).catch( function (err) {

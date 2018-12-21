@@ -1,5 +1,6 @@
-describe('vanilla function calls', function () {
+const AsyncInterpreter = require('./commons').AsyncInterpreter
 
+describe('vanilla function calls', function () {
 
   it('function should accept undefined as an argument and return it',  function (done) {
 

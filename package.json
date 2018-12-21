@@ -1,0 +1,28 @@
+{
+  "name": "async-interpreter",
+  "version": "1.0.0",
+  "description": "An asynchronous interpreter for Javascript written in the continuation passing style",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@gitlab.com/EconomicSpaceAgency/async-js-interpreter.git"
+  },
+  "author": "James E Foley (github.com/realisation)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://gitlab.com/EconomicSpaceAgency/async-js-interpreter/issues"
+  },
+  "homepage": "https://gitlab.com/EconomicSpaceAgency/async-js-interpreter#README",
+  "devDependencies": {
+    "chai": "^4.2.0"
+  },
+  "dependencies": {
+    "@babel/types": "^7.2.2"
+  }
+}

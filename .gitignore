@@ -1,0 +1,8 @@
+/node_modules/
+.idea/workspace.xml
+.idea/*
+.idea
+.vscode/*
+.nvm-node
+*.swp
+*.swo
