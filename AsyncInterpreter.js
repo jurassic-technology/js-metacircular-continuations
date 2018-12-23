@@ -1141,21 +1141,20 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       return this.interpret(node.argument, nextContinuationArgument, previousErrorContinuation) 
 
-      function nextContArgument (argument) {
+      function nextContinuationArgument (argument) {
         arg = argument
         var value = argument
-        if (self.operator === '++') value++
-        else if (self.operator == '--') value--
-        else {
-          var err = new TypeError('Unimplemented update operator: ' + self.operator)
-          return previousErrorContinuation('Error', err)
-        }   
-        return this.setValue(self.argument, value, scope, nextContValue, previousErrorContinuation)
+
+        if (node.operator === '++') value++
+        else if (node.operator == '--') value--
+        else return previousErrorContinuation('Error', new TypeError('Unimplemented update operator: ' + node.operator))
+
+        return self.setValue(node.argument, value, nextContinuationValue, previousErrorContinuation)
 
       }   
 
-      function nextContValue (value) {
-        var retVal = self.prefix ? value : arg 
+      function nextContinuationValue (value) {
+        var retVal = node.prefix ? value : arg 
         return previousContinuation(retVal)
       }   
 
