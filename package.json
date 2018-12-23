@@ -20,7 +20,8 @@
   },
   "homepage": "https://gitlab.com/EconomicSpaceAgency/async-js-interpreter#README",
   "devDependencies": {
-    "chai": "^4.2.0"
+    "chai": "^4.2.0",
+    "mocha": "^5.2.0"
   },
   "dependencies": {
     "@babel/types": "^7.2.2"
