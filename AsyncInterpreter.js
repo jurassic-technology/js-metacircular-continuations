@@ -9,7 +9,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       if (typeof code === 'string') this.ast = parse(code)
       else this.ast = code 
 
-      if (this.ast.id) this.set(this.ast.id.name, this) 
+      if (this.ast.id) this.declare(this.ast.id.name, this) 
         
       this.this = undefined
 
@@ -26,7 +26,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     spawn (ast) {
 
-      const newInterpreter = new AsyncInterpreter(ast, this.parent)
+      const newInterpreter = new AsyncInterpreter(ast, this)
       // TODO: how to handle this keyword here?
       newInterpreter.this = this.this
       newInterpreter.boundedArgs = this.boundedArgs 
@@ -34,29 +34,35 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     } 
 
-    execute (args, previousContinuation, previousErrorContinuation) {
+    execute () {
+
+      const previousContinuation = arguments[arguments.length - 2]
+      const previousErrorContinuation = arguments[arguments.length - 1]
 
       const argsObject = new Object
+      const args = arguments[0]
       const iterateArgs = args 
         ? this.boundedArgs
           ? this.boundedArgs.concat(args)
           : args
-        : this.boundedArgs
-          ? this.boundedArgs
-          : new Array
+        : args
+
+      const execution = new AsyncInterpreter(this.ast, this.parent) 
+      execution.boundedArgs = this.boundedArgs
+      execution.this = this.this 
 
       for (var i = 0; i < iterateArgs.length; i++) {
-        if (this.ast.params[i]) this.set(this.ast.params[i].name, iterateArgs[i])
-        argumentsObject[i] = iterateArgs[i]
+        if (this.ast.params[i]) {
+          execution.declare(this.ast.params[i].name, iterateArgs[i])
+        }
+        argsObject[i] = iterateArgs[i]
       } 
+
 
       Object.defineProperty(argsObject, 'length', { value: iterateArgs.length, enumerable: false }) 
       Object.defineProperty(argsObject, 'callee', { value: this.callee, enumerable: false }) 
-      this.set('arguments', argsObject) 
+      execution.declare('arguments', argsObject) 
 
-      const execution = new AsyncInterpreter(this.ast) 
-      execution.boundedArgs = this.boundedArgs
-      execution.this = this.this 
       return execution.interpret(execution.ast.body, previousContinuation, previousErrorContinuation)
 
     }
@@ -72,31 +78,49 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     call () {
 
+
+      const self = this 
+      const argsArray = Array.prototype.slice.call(arguments, 1, arguments.length - 2) 
+      const previousContinuation = arguments[arguments.length - 2] 
+      const previousErrorContinuation = arguments[arguments.length - 1] 
+      const thisObj = arguments[0]
+
       const prevThis = this.this
-      this.this = arguments[0]
-      const result = this.interpret.apply(this, Array.prototype.slice.call(arguments, 1))  
-      this.this = prevThis
-      return result
+      this.this = thisObj
+      return this.execute(argsArray, nextContinuationResetThis, previousErrorContinuation)
+
+      function nextContinuationResetThis (result) {
+        self.this = prevThis
+        return previousContinuation(result)
+      }
 
     }
 
-    apply () {
+    apply (thisObj, args, previousContinuation, previousErrorContinuation) {
+
+
+      const self = this
 
       const prevThis = this.this
-      this.this = arguments[0] 
-      const result = this.interpret.apply(this, arguments[1]) 
-      this.this = prevThis 
-      return result 
+      this.this = thisObj
+      return this.execute(args, nextContinuationResetThis, previousErrorContinuation) 
+
+      function nextContinuationResetThis (result) {
+        self.this = prevThis
+        return previousContinuation(result)
+      }
 
     }
    
     bind () { 
 
-      const interp = new AsyncInterp(this.ast) 
-      interp.this = arguments[0]
-      interp.boundedArgs = Array.prototype.slice.call(arguments, 1) 
-      interp.callee = this
-      return interp 
+      const interpreter = new AsyncInterpreter(this.ast) 
+      interpreter.this = arguments[0]
+      interpreter.boundedArgs = this.boundedArgs 
+        ? this.boundedArgs.concat(Array.prototype.slice.call(arguments, 1))
+        : Array.prototype.slice.call(arguments, 1)
+      interpreter.callee = this
+      return interpreter
 
     }
     
@@ -112,14 +136,14 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
           if (node === null) results.push(null) 
           if (node === null || node.type === 'EmptyStatement') return interpretNextNode()
 
-          return self.interpret(node, nextCont, nextErrCont) 
+          return self.interpret(node, nextContinuation, nextErrorContinuation) 
 
-          function nextCont (result) {
+          function nextContinuation (result) {
             results.push(result)
             return interpretNextNode()
           } 
 
-          function nextErrCont (errType, value) {
+          function nextErrorContinuation (errType, value) {
             return previousErrorContinuation(errType, value, results[ results.length - 1 ])
           } 
 
@@ -136,78 +160,86 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
         previousContinuation() 
       } else if (node instanceof Object && typeof node.type !== 'undefined') { 
         switch (node.type) {
+          case 'AssignmentExpression':
+            return this.assignmentExpression(node, previousContinuation, previousErrorContinuation)
+          case 'ArrayExpression':
+            return this.arrayExpression(node, previousContinuation, previousErrorContinuation)
+          case 'CatchClause':
+            return this.catchClause(node, previousContinuation, previousErrorContinuation)
           case 'EmptyStatement':
             return previousContinuation()
-          case 'File':
-            return this.program(node.program, previousContinuation, previousErrorContinuation)
-          case 'Program':
-            return this.program(node, previousContinuous, previousErrorContinuation)
+          case 'BinaryExpression':
+            return this.binaryExpression(node, previousContinuation, previousErrorContinuation)
           case 'BlockStatement':
             return this.blockStatement(node, previousContinuation, previousErrorContinuation)
+          case 'BreakStatement':
+            return this.breakStatement(node, previousContinuation, previousErrorContinuation)
+          case 'CallExpression':
+            return this.callExpression(node, previousContinuation, previousErrorContinuation)
+          case 'ConditionalExpression':
+            return this.conditionalExpression(node, previousContinuation, previousErrorContinuation)
+          case 'ContinueStatement':
+            return this.continueStatement(node, previousContinuation, previousErrorContinuation) 
+          case 'DoWhileStatement':
+            return this.doWhileStatement(node, previousContinuation, previousErrorContinuation) 
+          case 'ExpressionStatement':
+            return this.expressionStatement(node, previousContinuation, previousErrorContinuation)
+          case 'File':
+            return this.program(node.program, previousContinuation, previousErrorContinuation)
+          case 'ForStatement':
+            return this.loopExpression(node, previousContinuation, previousErrorContinuation)
+          case 'ForInStatement':
+            return this.forInStatement(node, previousContinuation, previousErrorContinuation) 
+          case 'ForOfStatement':
+            return this.forOfStatement(node, previousContinuation, previousErrorContinuation)
           case 'FunctionDeclaration':
             return this.functionDeclaration(node, previousContinuation, previousErrorContinuation) 
           case 'FunctionExpression':
             return this.functionExpression(node, previousContinuation, previousErrorContinuation)
-          case 'BreakStatement':
-          case 'ContinueStatement':
-            return previousErrorContinuation(node.type, (node.label ? node.label.name : undefined))
-          case 'ExpressionStatement':
-            return this.expressionStatement(node, previousContinuation, previousErrorContinuation)
-          case 'SequenceExpression':
-            return this.sequenceExpression(node, previousContinuation, previousErrorContinuation)
-          case 'CallExpression':
-            return this.callExpression(node, previousContinuation, previousErrorContinuation)
-          case 'NewExpression':
-            return this.newExpression(node, previousContinuation, previousErrorContinuation)
-          case 'IfStatement':
-          case 'ConditionalExpression':
-            return this.conditionalExpression(node, previousContinuation, previousErrorContinuation)
-          case 'WhileStatement':
-          case 'DoWhileStatement':
-          case 'ForStatement':
-            return this.loopExpression(node, previousContinuation, previousErrorContinuation)
-          case 'ForInStatement':
-          case 'ForOfStatement':
-            return this.forInStatement(node, previousContinuation, previousErrorContinuation)
           case 'Identifier':
             return this.identifier(node, previousContinuation, previousErrorContinuation)
-          case 'ReturnStatement':
-          case 'ThrowStatement':
-            return this.returnStatement(node, previousContinuation, previousErrorContinuation)
-          case 'TryStatement':
-            return this.tryStatement(node, previousContinuation, previousErrorContinuation)
-          case 'CatchClause':
-            return this.catchClause(node, previousContinuation, previousErrorContinuation)
+          case 'IfStatement':
+            return this.ifStatement(node, previousContinuation, previousErrorContinuation) 
           case 'LogicalExpression':
             return this.logicalExpression(node, previousContinuation, previousErrorContinuation)
-          case 'BinaryExpression':
-            return this.binaryExpression(node, previousContinuation, previousErrorContinuation)
-          case 'AssignmentExpression':
-            return this.assignmentExpression(node, previousContinuation, previousErrorContinuation)
-          case 'UpdateExpression':
-            return this.updateExpression(node, previousContinuation, previousErrorContinuation)
-          case 'UnaryExpression':
-            return this.unaryExpression(node, previousContinuation, previousErrorContinuation)
           case 'MemberExpression':
             return this.memberExpression(node, previousContinuation, previousErrorContinuation)
-          case 'ThisExpression':
-            return this.thisExpression(node, previousContinuation, previousErrorContinuation)
-          case 'StringLiteral':
-            return this.stringLiteral(node, previousContinuation, previousErrorContinuation)
+          case 'NewExpression':
+            return this.newExpression(node, previousContinuation, previousErrorContinuation)
+          case 'NullLiteral': 
+            return this.nullLiteral(node, previousContinuation, previousErrorContinuation) 
           case 'NumericLiteral':
             return this.numericLiteral(node, previousContinuation, previousErrorContinuation)
           case 'ObjectExpression':
             return this.objectExpression(node, previousContinuation, previousErrorContinuation)
-          case 'ObjectProperty':
-            return this.objectProperty(node, previousContinuation, previousErrorContinuation) 
           case 'ObjectMethod':
             return this.objectMethod(node, previousContinuation, previousErrorContinuation) 
-          case 'ArrayExpression':
-            return this.arrayExpression(node, previousContinuation, previousErrorContinuation)
+          case 'ObjectProperty':
+            return this.objectProperty(node, previousContinuation, previousErrorContinuation) 
+          case 'Program':
+            return this.program(node, previousContinuous, previousErrorContinuation)
+          case 'ReturnStatement':
+            return this.returnStatement(node, previousContinuation, previousErrorContinuation)
+          case 'SequenceExpression':
+            return this.sequenceExpression(node, previousContinuation, previousErrorContinuation)
+          case 'ThrowStatement':
+            return this.throwStatement(node, previousContinuation, previousErrorContinuation)
+          case 'TryStatement':
+            return this.tryStatement(node, previousContinuation, previousErrorContinuation)
+          case 'ThisExpression':
+            return this.thisExpression(node, previousContinuation, previousErrorContinuation)
+          case 'StringLiteral':
+            return this.stringLiteral(node, previousContinuation, previousErrorContinuation)
+          case 'UpdateExpression':
+            return this.updateExpression(node, previousContinuation, previousErrorContinuation)
+          case 'UnaryExpression':
+            return this.unaryExpression(node, previousContinuation, previousErrorContinuation)
           case 'VariableDeclaration':
             return this.variableDeclaration(node, previousContinuation, previousErrorContinuation)
           case 'VariableDeclarator':
             return this.variableDeclarator(node, previousContinuation, previousErrorContinuation)
+          case 'WhileStatement':
+            return this.whileStatement(node, previousContinuation, previousErrorContinuation) 
           default:
             throw new Error('Node type ' + node.type + ' not supported')
         }
@@ -247,8 +279,11 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     arrayExpression (node, previousContinuation, previousErrorContinuation) {
 
-      function nextCont () { return previousContinuation.apply(null, arguments) }
+      const self = this
+
       return this.interpretNodeArray(node.elements, nextCont, previousContinuation)
+
+      function nextCont () { return previousContinuation.apply(self, arguments) }
 
     } 
 
@@ -283,15 +318,15 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     blockStatement (node, previousContinuation, previousErrorContinuation) {
 
-      return this.interpretNodeArray(node.body, nextCont, nextErrCont)
+      return this.interpretNodeArray(node.body, nextContinuation, nextErrorContinuation)
 
-      function nextCont (results) {
+      function nextContinuation (results) {
 
         return previousContinuation(results [ results.length - 1 ])
 
       }
 
-      function nextErrCont (errType, result) {
+      function nextErrorContinuation (errType, result) {
 
         switch (errType) {
           case 'ReturnStatement':
@@ -302,7 +337,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
           case 'ThrowStatement':
           case 'Error':
           default:
-            return previousErrorContinuation.apply(null, arguments)
+            return previousErrorContinuation(errType, result)
 
         }
 
@@ -325,18 +360,21 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
     }
 
 
-    interpretCallExpression (node, previousContinuation, previousErrorContinuation) {
+    callExpression (node, previousContinuation, previousErrorContinuation) {
 
       const self = this
       let args, property, obj 
 
-      return this.interpretNodeArray(node.arguments, scope, nextContArgs, previousErrorContinuation) 
+      return this.interpretNodeArray(node.arguments, nextContinuationArgs, previousErrorContinuation) 
 
-      function nextContArgs (argArray) {
+      function nextContinuationArgs (argArray) {
 
         args = argArray
+
         if (node.callee.type === 'MemberExpression') {
-          return self.interpret(node.callee.object, nextContMember, previousErrorContinuation) 
+
+          return self.interpret(node.callee.object, nextContinuationMember, previousErrorContinuation) 
+
         } else {
 
           if (node.callee.name === 'eval') {
@@ -345,7 +383,8 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
           } else {
 
-            return self.interpret(node.callee, nextContCallee, previousErrorContinuation)
+
+            return self.interpret(node.callee, nextContinuationCallee, previousErrorContinuation)
 
           } 
 
@@ -353,17 +392,53 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       }   
 
-      function nextContMember (object) {
+      function nextContinuationMember (object) {
 
+        obj = object 
         if (node.callee.computed) {
-          return self.interpret(node.callee.property, nextContComputed, previousErrorContinuation)
+          return self.interpret(node.callee.property, nextContinuationComputed, previousErrorContinuation)
         } else {
-          return nextContCallee(object[node.callee.property.name], object) 
+          const name = node.callee.property.name
+
+          if (name === 'call') {
+            
+            args.push(previousContinuation, previousErrorContinuation) 
+            return object[name].apply(object, args) 
+            
+          } else if (name === 'apply') {
+
+            args.push(previousContinuation, previousErrorContinuation) 
+            return object[name](args[0], args[1], previousContinuation, previousErrorContinuation) 
+            
+
+          } else if (name === 'bind') {
+
+            const boundFunction = object.bind.apply(object, args)
+            return previousContinuation(boundFunction) 
+
+          } else {
+
+            return nextContinuationCallee(object[node.callee.property.name], object) 
+
+          } 
+
         }   
 
       }   
 
-      function nextContComputed (prop) {
+      function nextContinuationComputed (prop) {
+
+        if (prop === 'call' || prop === 'apply') {
+          
+          args.push(previousContinuation, previousErrorContinuation) 
+          return obj[name].apply(obj, args) 
+
+        } else if (prop === 'bind') {
+
+          const boundFunction = obj.bind.apply(obj, args)
+          return previousContinuation(boundFunction) 
+
+        }
 
         property = prop
         return nextContCallee(obj[prop]) 
@@ -371,16 +446,21 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       }   
 
 
-      function nextContCallee (callee) {
+      function nextContinuationCallee (callee) {
         
         if (callee instanceof AsyncInterpreter) {
-
+          return callee.execute(args, previousContinuation, previousErrorContinuation) 
         } else {
           return previousErrorContinuation('TypeError', node.callee.name + ' is not a function.') 
         }   
 
-
       }   
+
+
+      function executeApplyBindOrCall (kind) {
+        argsArray.push(previousContinuation, previousErrorContinuation) 
+        return object[kind].apply(object, args)
+      }
 
     }
 
@@ -414,16 +494,16 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       const self = this
       let lastResult
 
-      return self.interpret(node.body, nextContBody, previousErrorContinuation)
+      return self.interpret(node.body, nextContinuationBody, previousErrorContinuation)
 
-      function nextContBody (result) {
+      function nextContinuationBody (result) {
 
         lastResult = result
-        return self.interpret(node.test, nextContTest, previousErrorContinuation)
+        return self.interpret(node.test, nextContinuationTest, previousErrorContinuation)
 
       }
 
-      function nextErrContBody (errType, value, extra) {
+      function nextErrorContinuationBody (errType, value, extra) {
 
         switch (errType) {
 
@@ -434,7 +514,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
           case 'ContinueStatement':
 
-            return self.interpret(node.test, nextConntTest, previousErrorContinuation)
+            return self.interpret(node.test, nextContinuationTest, previousErrorContinuation)
 
           default:
 
@@ -443,9 +523,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
         }
       }
 
-      function nextContTest (test) {
+      function nextContinuationTest (test) {
 
-        if (test) return self.interpret(node.body, nextContBody, nextErrContBody)
+        if (test) return self.interpret(node.body, nextContinuationBody, nextErrorContinuationBody)
         else return previousContinuation(lastResult)
 
       }
@@ -492,18 +572,19 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
         }
 
         function nextContInitBodyLoop () {
-          return self.interpret(node.body, nextContLoopBody, nextErrContBody)
+          return self.interpret(node.body, nextContinuationLoopBody, nextErrorContinuationBody)
         }
 
-        function nextContLoopBody (result, doNotSetLastResult) {
+        function nextContinuationLoopBody (result, doNotSetLastResult) {
           if (!doNotSetLastResult) lastResult = result
           if (iterables.length) {
-            self.interpret(getLeftSetter(iterables.shift()), nextContInitBodyLoop, previousErrorContinuation)
+            self.interpret(getLeftSetter(iterables.shift()), nextContinuationInitBodyLoop, previousErrorContinuation)
           }
           return previousContinuation(lastResult)
         }
 
-        function nextErrContBody (errType, value, extra) {
+        function nextErrorContinuationBody (errType, value, extra) {
+
           switch (errType) {
             case 'BreakStatement':
               if (typeof value === 'undefined') return previousContinuation()
@@ -513,7 +594,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
               return previousErrorContinuation(errType, value)
             case 'ReturnStatement':
             default:
-              return previousErrorContinuation.apply(null, arguments)
+              return previousErrorContinuation(errType, value, extra)
 
           }
         }
@@ -554,10 +635,10 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       }
 
       function nextContInitBodyLoop () {
-        return self.interpret(node.body, nextContLoopBody, nextErrContBody)
+        return self.interpret(node.body, nextContinuationLoopBody, nextErrorContinuationBody)
       }
 
-      function nextContLoopBody (result) {
+      function nextContinuationLoopBody (result) {
         lastResult = result
         if (iterables.length) {
           self.interpret(getLeftSetter(iterables.shift()), nextContInitBodyLoop, previousErrorContinuation)
@@ -566,7 +647,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       }
 
 
-      function nextErrContBody (errType, value, extra) {
+      function nextErrorContinuationBody (errType, value, extra) {
         switch (errType) {
           case 'BreakStatement':
             if (typeof value === 'undefined') return previousContinuation()
@@ -587,37 +668,37 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       const self = this
       let lastResult
 
-      return this.interpret(node.init, nextContInit, previousErrorContinuation)
+      return this.interpret(node.init, nextContinuationInit, previousErrorContinuation)
 
-      function nextContInit () {
-        return self.interpret(node.test, nextContTest, previousErrorContinuation)
+      function nextContinuationInit () {
+        return self.interpret(node.test, nextContinuationTest, previousErrorContinuation)
       }
 
-      function nextContTest (test) {
-        if (test) return self.interpret(node.body, nextContBody, nextErrContBody)
+      function nextContinuationTest (test) {
+        if (test) return self.interpret(node.body, nextContinuationBody, nextErrorContinuationBody)
         else return previousContinuation(lastResult)
       }
 
-      function nextContBody (result) {
+      function nextContinuationBody (result) {
         lastResult = result
-        return self.interpret(node.update, nextContUpdate, previousErrorContinuation)
+        return self.interpret(node.update, nextContinuationUpdate, previousErrorContinuation)
       }
 
-      function nextContUpdate () {
-        return self.interpret(node.test, nextContTest, previousErrorContinuation)
+      function nextContinuationUpdate () {
+        return self.interpret(node.test, nextContinuationTest, previousErrorContinuation)
       }
 
-      function nextErrContBody (errType, value, extra) {
+      function nextErrorContinuationBody (errType, value, extra) {
         switch (errType) {
 
           case 'BreakStatement':
 
-            if (!value) return preCont(extra ? extra : lastResult)
+            if (!value) return previousContinuation(extra ? extra : lastResult)
             else return previousErrorContinuation(errType, value)
 
           case 'ContinueStatement':
 
-            if (!value) return self.interpret(node.update, nextContUpdate, previousErrorContinuation)
+            if (!value) return self.interpret(node.update, nextContinuationUpdate, previousErrorContinuation)
             else return previousErrorContinuation(errType, value, nextContContinue)
 
           default:
@@ -637,16 +718,17 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       const interp = this.spawn(node)
 
-      this.set(node.id.name, interp)
+      this.declare(node.id.name, interp)
 
-      return interp
+      return previousContinuation(undefined) 
 
     } 
 
     functionExpression (node, previousContinuation, previousErrorContinuation) {
 
       const interp = this.spawn(node)
-      return interp
+
+      return previousContinuation(interp) 
 
     }
 
@@ -682,9 +764,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       const self = this
 
-      return this.interpret(node.body, previousContinuation, nextErrContLabel)
+      return this.interpret(node.body, previousContinuation, nextErrorContinuationLabel)
 
-      function nextErrContLabel (errType, label, extra) {
+      function nextErrorContinuationLabel (errType, label, extra) {
         switch (errType) {
           case 'BreakStatement':
             if (label === node.label.name) return previousContinuation(extra)
@@ -705,20 +787,26 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       let property
 
       if (node.computed) return this.interpret(node.property, nextContinuationProperty, previousErrorContinuation) 
-      else if (!node.computed) return this.interpret(node.object, nextContinuationObject, previousErrorContinuation) 
+      else if (!node.computed) {
+        property = node.property.name
+        return this.interpret(node.object, nextContinuationObject, previousErrorContinuation) 
+      }
       
-      function nextContinuationProperty (property) {
+      function nextContinuationProperty (prop) {
         property = prop
         return self.interpret(node.object, nextContinuationObject, previousErrorContinuation) 
       } 
 
       function nextContinuationObject (object) {
 
-        const descriptor = Object.getOwnPropertyDescriptor(object, node.property.name)
+        if (object instanceof AsyncInterpreter && (property === 'call' || property === 'apply' || property === 'bind')) {
+          return previousContinuation(object[property])
+        }
+
+        const descriptor = Object.getOwnPropertyDescriptor(object, property)
 
         if (descriptor.get) {
           const method = descriptor.get()
-          console.log('method', method)
           return method.execute(undefined, nextContinuationGetterMethod, previousErrorContinuation)
         } else {
           return self.resolveValue(descriptor.value, nextContinuationResolveValue, previousErrorContinuation)
@@ -740,6 +828,53 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       }
 
     }
+
+    newExpression (scope, previousContinuation, previousErrorContinuation) {
+
+      var self = this, args, thisObj
+
+      return this.interpretNodeArray(node.arguments, nextContinuationArgs, previousErrorContinuation)
+
+      function nextContinuationArgs (_args) {
+
+        args = _args
+        return self.callee.interpret(scope, nextContinuationCallee, previousErrorContinuation)
+
+      }
+
+      function nextContinuationCallee (Constructor) {
+
+        if (!(Constructor instanceof AsyncScope)) {
+
+          var err = new TypeError(type + ' is not a function')
+          return prevErrCont(err)
+
+        } else {
+
+          thisObj = Object.create(Constructor.prototype || new Object())
+          var newCallee = Constructor.clone(args, thisObj)
+          return newCallee.interpret(nextContinuationInterpret, previousErrorContinuation)
+
+        }
+
+      }
+
+      function nextContinuationInterpret (value, isReturn) {
+
+        if (isReturn) {
+          if (!value instanceof Object) value = thisObj
+        } else {
+          value = thisObj
+        }
+
+        return previousContinuation(value)
+
+      }
+
+    }
+
+
+
 
     nullLiteral (node, previousContinuation, previousErrorContinuation) {
       return previousContinuation(null) 
@@ -833,7 +968,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
           case 'ReferenceError':
           case 'ThrowStatement':
           case 'Error':
-            return previousErrorContinuation.apply(this, arguments) 
+            return previousErrorContinuation(result) 
         }
       }
     }
@@ -844,7 +979,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
     } 
 
     returnStatement (node, previousContinuation, previousErrorContinuation) {
+
       if (node.argument) return this.interpret(node.argument, nextContinuation, previousErrorContinuation) 
+      else return previousErrorContinuation(node.type) 
 
       function nextContinuation (argument) {
         return previousErrorContinuation(node.type, argument) 
@@ -931,7 +1068,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     thisExpression (node, previousContinuation, previousErrorContinuation) {
 
-      return previousContinuation(this)
+      return previousContinuation(this.this)
 
     }
 
@@ -1064,8 +1201,8 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       function nextContArgument (value, object, property) {
 
-
         if (object && self.operator == 'delete') return previousContinuation(delete object[property])
+
         else if (object) value = object[propertyName]
 
         if (self.operator === 'typeof') {
@@ -1083,7 +1220,6 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       }
         
-
     }
 
     variableDeclaration (node, previousContinuation, previousErrorContinuation) {
@@ -1099,16 +1235,18 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
     variableDeclarator (node, previousContinuation, previousErrorContinuation) {
       
       const self = this
+
       if (node.init) return this.interpret(node.init, nextContinuation, previousErrorContinuation) 
       else return nextContinuation(undefined)
 
-      function nextContinuation(value) {
-        self.set(node.id.name, value) 
-        return previousContinuation(value, node.id.name) 
+      function nextContinuation (value) {
+
+        self.declare(node.id.name, value) 
+        return previousContinuation(undefined)
+
       }
 
     } 
-
 
     computeAssignmentExpression (left, right, operator) {
       switch (node.operator) {
@@ -1194,7 +1332,6 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       else return previousContinuation(value) 
       
     } 
-
 
     setValue (node, value, previousContinuation, previousErrorContinuation) {
 

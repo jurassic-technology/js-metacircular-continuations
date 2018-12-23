@@ -42,7 +42,7 @@ it('should be able to create an object with a getter that works', function (done
 
 })
 
-it.only('should be able to create an object with a setter property that works', function (done) {
+it('should be able to create an object with a setter property that works', function (done) {
 
   new AsyncInterpreter(
     'var a = { set a (x) { this._a = x } }; a._a = 5; '
