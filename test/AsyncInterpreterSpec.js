@@ -5,9 +5,9 @@ test.only = function (name, path) { describe.only(name, function () { require(pa
 
 describe('Async Interpreter Tests', function () {
 
-  test.only('functions', './functions') 
+  test('functions', './functions') 
   test('variable declarations', './variableDeclarations') 
   test('member expressions', './memberExpressions') 
-  test('object expressions', './objectExpressions') 
+  test.only('object expressions', './objectExpressions') 
 
 })

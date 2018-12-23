@@ -7,7 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "test"
+    "test": "mocha test/AsyncInterpreterSpec"
   },
   "repository": {
     "type": "git",

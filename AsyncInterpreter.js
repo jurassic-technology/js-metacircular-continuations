@@ -807,7 +807,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
         if (descriptor.get) {
           const method = descriptor.get()
-          return method.execute(undefined, nextContinuationGetterMethod, previousErrorContinuation)
+          return method.execute([], nextContinuationGetterMethod, previousErrorContinuation)
         } else {
           return self.resolveValue(descriptor.value, nextContinuationResolveValue, previousErrorContinuation)
         } 

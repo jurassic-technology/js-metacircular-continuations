@@ -60,11 +60,25 @@ it('a getter property instantiated with a getter method expression should work',
 
   new AsyncInterpreter(
     ' var a = { get a () { return 5 } }; a.a; '
-
   ).evaluate().then( (val) => {
     done()
   }).catch( (err) => {
+    console.log('err', err) 
     done(err)
   })
 
 })
+
+
+it('property that is a function should execute this keyword correctly', function (done) {
+
+  new AsyncInterpreter(
+    ' var x = { y: function () { return this.z }, z: 5 }; x.y(); '
+  ).evaluate().then((val) => {
+    expect(val).to.equal(5) 
+    done()
+  }).catch((err) => {
+    done(err)
+  }) 
+
+}) 
