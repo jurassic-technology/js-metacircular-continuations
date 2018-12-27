@@ -9,5 +9,7 @@ describe('Async Interpreter Tests', function () {
   test('member expressions', './memberExpressions') 
   test('object expressions', './objectExpressions') 
   test('update expressions', './updateExpressions') 
+  test('try statements', './tryStatements') 
+  test.only('new expressions', './newExpressions') 
 
 })

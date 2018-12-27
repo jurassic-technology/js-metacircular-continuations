@@ -12,6 +12,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       if (this.ast.id) this.declare(this.ast.id.name, this) 
         
       this.this = undefined
+      this.prototype = new Object 
 
     } 
 
@@ -51,17 +52,21 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       execution.boundedArgs = this.boundedArgs
       execution.this = this.this 
 
-      for (var i = 0; i < iterateArgs.length; i++) {
-        if (this.ast.params[i]) {
-          execution.declare(this.ast.params[i].name, iterateArgs[i])
-        }
-        argsObject[i] = iterateArgs[i]
+      if (this.ast.param) { // it's a catch block
+        execution.declare(this.ast.param.name, args[0]) 
+      } else {
+        for (var i = 0; i < iterateArgs.length; i++) {
+          if (this.ast.params[i]) {
+            execution.declare(this.ast.params[i].name, iterateArgs[i])
+          }
+          argsObject[i] = iterateArgs[i]
+        } 
+
+        Object.defineProperty(argsObject, 'length', { value: iterateArgs.length, enumerable: false }) 
+        Object.defineProperty(argsObject, 'callee', { value: this.callee, enumerable: false }) 
+        execution.declare('arguments', argsObject) 
+
       } 
-
-
-      Object.defineProperty(argsObject, 'length', { value: iterateArgs.length, enumerable: false }) 
-      Object.defineProperty(argsObject, 'callee', { value: this.callee, enumerable: false }) 
-      execution.declare('arguments', argsObject) 
 
       return execution.interpret(execution.ast.body, previousContinuation, previousErrorContinuation)
 
@@ -76,6 +81,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
     get callee () { return this._callee } 
     set callee (x) { return this._callee = x } 
 
+    get prototype (){ return this._prototype } 
+    set prototype (x) { return  this._prototype = x } 
+
     call () {
 
 
@@ -89,9 +97,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       this.this = thisObj
       return this.execute(argsArray, nextContinuationResetThis, previousErrorContinuation)
 
-      function nextContinuationResetThis (result) {
+      function nextContinuationResetThis (result, isReturn) {
         self.this = prevThis
-        return previousContinuation(result)
+        return previousContinuation(result, isReturn) 
       }
 
     }
@@ -105,9 +113,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       this.this = thisObj
       return this.execute(args, nextContinuationResetThis, previousErrorContinuation) 
 
-      function nextContinuationResetThis (result) {
+      function nextContinuationResetThis (result, isReturn) {
         self.this = prevThis
-        return previousContinuation(result)
+        return previousContinuation(result, isReturn)
       }
 
     }
@@ -259,11 +267,8 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       function nextContRight (right) {
 
         rightVal = right
-        if (node.operator === '=') {
-          return self.setValue(node.left, right, previousContinuation, previousErrorContinuation) 
-        } else {
-          return self.interpret(node.left, nextContLeft, previousErrorContinuation) 
-        }   
+        if (node.operator === '=') return self.setValue(node.left, right, previousContinuation, previousErrorContinuation) 
+        else return self.interpret(node.left, nextContLeft, previousErrorContinuation) 
 
       }
 
@@ -395,56 +400,63 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       function nextContinuationMember (object) {
 
         obj = object 
-        if (node.callee.computed) {
-          return self.interpret(node.callee.property, nextContinuationComputed, previousErrorContinuation)
-        } else {
-          const name = node.callee.property.name
+        if (node.callee.computed) return self.interpret(node.callee.property, nextContinuationComputed, previousErrorContinuation)
+        else return performCall(object, node.callee.property.name) 
 
-          if (name === 'call') {
+      }   
+
+
+
+      function nextContinuationComputed (prop) {
+        return performCall(obj, prop) 
+      }   
+
+
+      function performCall (object, prop) {
+
+        if (object === Object && args[0] instanceof AsyncInterpreter) {
+
+          if (prop === 'setPrototypeOf') {
+
+            args[0].prototype = args[1] 
+            return previousContinuation(args[0]) 
+
+          } else if (prop === 'getPrototypeOf') {
+
+            const prototype = args[0].prototype
+            return previousContinuation(prototype) 
+
+          }
+
+        } else if (object instanceof AsyncInterpreter) {
+
+          if (prop === 'call') {
             
             args.push(previousContinuation, previousErrorContinuation) 
-            return object[name].apply(object, args) 
+            return object.call.apply(object, args) 
             
-          } else if (name === 'apply') {
+          } else if (prop === 'apply') {
 
             args.push(previousContinuation, previousErrorContinuation) 
-            return object[name](args[0], args[1], previousContinuation, previousErrorContinuation) 
+            return object.apply([0], args[1], previousContinuation, previousErrorContinuation) 
             
 
-          } else if (name === 'bind') {
+          } else if (prop === 'bind') {
 
             const boundFunction = object.bind.apply(object, args)
             return previousContinuation(boundFunction) 
 
-          } else {
+          }
 
-            return nextContinuationCallee(object[node.callee.property.name], object) 
 
-          } 
+        } else {
 
-        }   
+          return nextContinuationCallee(object[node.callee.property.name], object) 
 
-      }   
+        } 
 
-      function nextContinuationComputed (prop) {
 
-        if (prop === 'call' || prop === 'apply') {
-          
-          args.push(previousContinuation, previousErrorContinuation) 
-          return obj[name].apply(obj, args) 
-
-        } else if (prop === 'bind') {
-
-          const boundFunction = obj.bind.apply(obj, args)
-          return previousContinuation(boundFunction) 
-
-        }
-
-        property = prop
-        return nextContCallee(obj[prop]) 
-
-      }   
-
+      }
 
       function nextContinuationCallee (callee) {
         
@@ -783,77 +795,102 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
    memberExpression (node, previousContinuation, previousErrorContinuation) {
 
-      const self = this
-      let property
+     const self = this
+     let property
 
-      if (node.computed) return this.interpret(node.property, nextContinuationProperty, previousErrorContinuation) 
-      else if (!node.computed) {
-        property = node.property.name
-        return this.interpret(node.object, nextContinuationObject, previousErrorContinuation) 
-      }
-      
-      function nextContinuationProperty (prop) {
-        property = prop
-        return self.interpret(node.object, nextContinuationObject, previousErrorContinuation) 
-      } 
+     if (node.computed) return this.interpret(node.property, nextContinuationProperty, previousErrorContinuation) 
+     else if (!node.computed) {
+       property = node.property.name
+       return this.interpret(node.object, nextContinuationObject, previousErrorContinuation) 
+     }
+       
+     function nextContinuationProperty (prop) {
+       property = prop
+       return self.interpret(node.object, nextContinuationObject, previousErrorContinuation) 
+     } 
+ 
+     function nextContinuationObject (object) {
 
-      function nextContinuationObject (object) {
+       if (object instanceof AsyncInterpreter) {
 
-        if (object instanceof AsyncInterpreter && (property === 'call' || property === 'apply' || property === 'bind')) {
-          return previousContinuation(object[property])
-        }
+         if (property === 'prototype') return previousContinuation(object.prototype) 
 
-        const descriptor = Object.getOwnPropertyDescriptor(object, property)
+         if (property === 'call' || property === 'apply' || property === 'bind') {
+           return previousContinuation(object[property])
+         } 
 
-        if (descriptor.get) {
-          const method = descriptor.get()
-          return method.execute([], nextContinuationGetterMethod, previousErrorContinuation)
-        } else {
-          return self.resolveValue(descriptor.value, nextContinuationResolveValue, previousErrorContinuation)
-        } 
+       } 
 
-      }
+       return readDescriptor(object, property) 
+         
+       function readDescriptor (object, property) {
+
+         const descriptor = Object.getOwnPropertyDescriptor(object, property) 
+
+         if (descriptor) {
+
+           if (descriptor.get) {
+
+             const method = descriptor.get()
+             return method.execute([], nextContinuationGetterMethod, previousErrorContinuation)
+
+           } else {
+
+             return self.resolveValue(descriptor.value, nextContinuationResolveValue, previousErrorContinuation)
+
+           }
+
+         } 
+
+         let prototype 
+         if (object instanceof AsyncInterpreter) prototype = object.prototype
+         else prototype = Object.getPrototypeOf(object)
+         if (prototype ===  null) return previousContinuation(undefined) 
+         return readDescriptor(prototype, property) 
+
+       } 
+
+     }
 
 
-      function nextContinuationGetterMethod (value) {
+     function nextContinuationGetterMethod (value) {
 
-        return self.resolveValue(value, nextContinuationResolveValue, previousErrorContinuation) 
+       return self.resolveValue(value, nextContinuationResolveValue, previousErrorContinuation) 
 
-      } 
+     } 
 
-      function nextContinuationResolveValue (value) {
+     function nextContinuationResolveValue (value) {
 
-        return previousContinuation(value)
+       return previousContinuation(value)
 
-      }
+     }
 
     }
 
-    newExpression (scope, previousContinuation, previousErrorContinuation) {
+    newExpression (node, previousContinuation, previousErrorContinuation) {
 
-      var self = this, args, thisObj
+      var self = this, args, retVal
 
       return this.interpretNodeArray(node.arguments, nextContinuationArgs, previousErrorContinuation)
 
       function nextContinuationArgs (_args) {
 
         args = _args
-        return self.callee.interpret(scope, nextContinuationCallee, previousErrorContinuation)
+        return self.interpret(node.callee, nextContinuationCallee, previousErrorContinuation)
 
       }
 
       function nextContinuationCallee (Constructor) {
 
-        if (!(Constructor instanceof AsyncScope)) {
+        if (Constructor instanceof AsyncInterpreter) {
 
-          var err = new TypeError(type + ' is not a function')
-          return prevErrCont(err)
+          retVal = Object.create(Constructor.prototype || new Object())
+          return Constructor.apply(retVal, args, nextContinuationInterpret, previousErrorContinuation)
 
         } else {
 
-          thisObj = Object.create(Constructor.prototype || new Object())
-          var newCallee = Constructor.clone(args, thisObj)
-          return newCallee.interpret(nextContinuationInterpret, previousErrorContinuation)
+          var err = new TypeError(type + ' is not a function')
+          return prevErrCont(err)
 
         }
 
@@ -861,20 +898,14 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       function nextContinuationInterpret (value, isReturn) {
 
-        if (isReturn) {
-          if (!value instanceof Object) value = thisObj
-        } else {
-          value = thisObj
-        }
+        if (isReturn) { if (!value instanceof Object) value = thisObj }
+        else value = retVal
 
         return previousContinuation(value)
 
       }
 
     }
-
-
-
 
     nullLiteral (node, previousContinuation, previousErrorContinuation) {
       return previousContinuation(null) 
@@ -1086,47 +1117,63 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
     tryStatement (node, previousContinuation, previousErrorContinuation) {
 
       const self = this
-      let tryValue
+      const tryBlock = node.block 
+      const handler = node.handler
+      const finalizer = node.finalizer
+      let evaluationValue, hadPreviousParamValue, previousParamValue
+      
 
-      return this.interpret(node.block, nextContTry, nextContInvokeCatchOrFinally)
+      return this.interpret(tryBlock, nextContinuationTry, nextContinuationInvokeCatchOrFinally)
 
-      function nextContTry (tryVal) {
+      function nextContinuationTry (tryVal) {
 
-        tryValue = tryVal
+        evaluationValue = tryVal
 
-        if (node.finalizer) return self.interpret(node.finalizer, nextContFinally, previousErrorContinuation)
+        if (finalizer) return self.interpret(finalizer, nextContinuationFinally, previousErrorContinuation)
         else return previousContinuation(tryValue)
 
       }
 
-      function nextContInvokeCatchOrFinally (error) {
+      function nextContinuationInvokeCatchOrFinally (errorType, error) {
 
-        if (node.handler) {
-          const handlerScope = scope.newAsyncScope(self.handler)
-          handlerScope.declare(node.handler.param.name, arguments[1])
-          return handlerScope.i(nextContCatch, previousErrorContinuation)
+        if (handler) {
+          
+          if (!self.has(handler.param.name)) self.declare(handler.param.name, error) 
+          else {
+            hadPreviousParamValue = true
+            previousParamValue = self.get(handler.param.name) 
+            self.set(handler.param.name, error) 
+          }
+
+          return self.interpret(handler, nextContinuationCatch, previousErrorContinuation)
+
         } else if (node.finalizer) {
-          return self.interpret(node.finalizer, nextContFinally, previousErrorContinuation)
+
+          return self.interpret(finalizer, nextContinuationFinally, previousErrorContinuation)
+
         }
 
       }
 
-      function nextContCatch (value, isReturn) {
+      function nextContinuationCatch (value, isReturn) {
+
+        if (hadPreviousParamValue) self.set(handler.param.name, previousParamValue) 
+        else self.delete(handler.param.name) 
 
         if (isReturn) return previousErrorContinuation('ReturnStatement', value)
 
         if (node.finalizer) {
-          tryValue = value
-          return self.interpret(node.finalizer, nextContFinally, previousErrorContinuation)
+          evaluationValue = value 
+          return self.interpret(finalizer, nextContinuationFinally, previousErrorContinuation)
         }
 
         return previousContinuation(value)
 
       }
 
-      function nextContFinally (finalizerValue) {
+      function nextContinuationFinally () {
 
-        return previousContinuation(finalizerValue ? finalizerValue : tryValue)
+        return previousContinuation(evaluationValue)
 
       }
 
