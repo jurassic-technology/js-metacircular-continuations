@@ -18,6 +18,6 @@ describe('Async Interpreter Tests', function () {
   test('while loop', './whileLoops')
   test('for in loops', './forInLoops') 
   test('for of loops', './forOfLoops') 
-  test.only('for loops', './forLoops')
+  test('for loops', './forLoops')
 
 })
