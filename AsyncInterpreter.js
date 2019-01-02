@@ -263,19 +263,20 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       const self = this
       let rightVal
 
-      return this.interpret(node.right, nextContRight, previousErrorContinuation) 
+      return this.interpret(node.right, nextContinuationRight, previousErrorContinuation) 
 
-      function nextContRight (right) {
+      function nextContinuationRight (right) {
 
         rightVal = right
         if (node.operator === '=') return self.setValue(node.left, right, previousContinuation, previousErrorContinuation) 
-        else return self.interpret(node.left, nextContLeft, previousErrorContinuation) 
+        else return self.interpret(node.left, nextContinuationLeft, previousErrorContinuation) 
 
       }
 
-      function nextContLeft (left) { 
+      function nextContinuationLeft (left) { 
 
         const value = self.computeAssignmentExpression(left, rightVal, node.operator)
+
         if (value instanceof Error) return previousErrorContinuation(new Error('Invalid operator: ' + node.operator))
         else return self.setValue(node.left, value, previousContinuation, previousErrorContinuation) 
 
@@ -559,24 +560,24 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     forInStatement (node, previousContinuation, previousErrorContinuation) {
 
-      const self = this, iterables = []
-      let lastResult
+      const self = this
+      let lastResult, iterables = [] 
 
       const left = node.left.type === 'VariableDeclaration'
-        ? this.left.declarations[0].id
-        : this.left
+        ? node.left.declarations[0].id
+        : node.left
 
-      self.scope.declare(left.name, undefined)
+      self.declare(left.name, undefined)
 
-      return self.interpret(scope, nextContRight, previousErrorContinuation)
+      return self.interpret(node.right, nextContinuationRight, previousErrorContinuation)
 
-      function nextContRight (right) {
+      function nextContinuationRight (right) {
 
         iterables = Object.keys(right)
         if (iterables.length)  {
 
           const leftNode = getLeftSetter(iterables.shift())
-          return self.interpret(leftNode, nextContInitBodyLoop, previousErrorContinuation)
+          return self.interpret(leftNode, nextContinuationInitBodyLoop, previousErrorContinuation)
 
         } else  {
 
@@ -585,11 +586,11 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
         }
 
         function getLeftSetter (value) {
-          const rightNode = new StringLiteral(value)
-          return new AssignmentExpression('=', left, rightNode)
+          const right = { type: 'StringLiteral', value: value }
+          return { type: 'AssignmentExpression', left: left, right: right, operator: '=' }
         }
 
-        function nextContInitBodyLoop () {
+        function nextContinuationInitBodyLoop () {
           return self.interpret(node.body, nextContinuationLoopBody, nextErrorContinuationBody)
         }
 
@@ -608,7 +609,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
               if (typeof value === 'undefined') return previousContinuation()
               return previousErrorContinuation(errType, value)
             case 'ContinueStatement':
-              if (typeof value === 'undefined') return nextContLoopBody(undefined, true)
+              if (typeof value === 'undefined') return nextContinuationLoopBody(undefined, true)
               return previousErrorContinuation(errType, value)
             case 'ReturnStatement':
             default:
@@ -671,7 +672,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
             if (typeof value === 'undefined') return previousContinuation()
             return previousErrorContinuation(errType, value)
           case 'ContinueStatement':
-            if (typeof value === 'undefined') return nextContLoopBody(undefined, true)
+            if (typeof value === 'undefined') return nextContinuationLoopBody(undefined, true)
             return previousErrorContinuation(errType, value)
           case 'ReturnStatement':
           default:
