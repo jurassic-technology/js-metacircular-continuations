@@ -106,7 +106,6 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     apply (thisObj, args, previousContinuation, previousErrorContinuation) {
 
-
       const self = this
 
       const prevThis = this.this
@@ -438,9 +437,8 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
           } else if (prop === 'apply') {
 
             args.push(previousContinuation, previousErrorContinuation) 
-            return object.apply([0], args[1], previousContinuation, previousErrorContinuation) 
+            return object.apply(args[0], args[1], previousContinuation, previousErrorContinuation) 
             
-
           } else if (prop === 'bind') {
 
             const boundFunction = object.bind.apply(object, args)
