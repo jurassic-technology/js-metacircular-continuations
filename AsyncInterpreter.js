@@ -300,16 +300,16 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       const self = this
       let leftVal
 
-      return this.interpret(node.left, nextContLeft, previousErrorContinuation)
+      return this.interpret(node.left, nextContinuationLeft, previousErrorContinuation)
 
-      function nextContLeft (left) {
+      function nextContinuationLeft (left) {
 
         leftVal = left
-        return self.interpret(node.right, nextContRight, previousErrorContinuation)
+        return self.interpret(node.right, nextContinuationRight, previousErrorContinuation)
 
       }
 
-      function nextContRight (right) {
+      function nextContinuationRight (right) {
 
         const value = self.computeBinaryExpression(leftVal, right, node.operator)
 
@@ -626,41 +626,43 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       let lastResult
 
       const left = node.left.type === 'VariableDeclaration'
-        ? this.left.declarations[0].id
-        : this.left
+        ? node.left.declarations[0].id
+        : node.left
 
-      self.d(left.name, undefined)
+      self.declare(left.name, undefined)
 
-      return self.interpret(node.right, nextContRight, previousErrorContinuation)
+      return self.interpret(node.right, nextContinuationRight, previousErrorContinuation)
 
-      function nextContRight (right) {
+      function nextContinuationRight (right) {
 
         for (const iterable of right) iterables.push(iterable)
 
         if (iterables.length)  {
 
           const leftNode = getLeftSetter(iterables.shift())
-          return self.interpret(leftNode, nextContInitBodyLoop, previousErrorContinuation)
+          return self.interpret(leftNode, nextContinuationInitBodyLoop, previousErrorContinuation)
 
         } else  {
+
           return previousContinuation()
+
         }
 
       }
 
       function getLeftSetter (value) {
-        const rightNode = new StringLiteral(value)
-        return new AssignmentExpression('=', left, rightNode)
+        const right = { type: 'StringLiteral', value: value }
+        return { type: 'AssignmentExpression', left: left, right: right, operator: '=' }
       }
 
-      function nextContInitBodyLoop () {
+      function nextContinuationInitBodyLoop () {
         return self.interpret(node.body, nextContinuationLoopBody, nextErrorContinuationBody)
       }
 
       function nextContinuationLoopBody (result) {
         lastResult = result
         if (iterables.length) {
-          self.interpret(getLeftSetter(iterables.shift()), nextContInitBodyLoop, previousErrorContinuation)
+          self.interpret(getLeftSetter(iterables.shift()), nextContinuationInitBodyLoop, previousErrorContinuation)
         }
         return previousContinuation(lastResult)
       }
@@ -679,9 +681,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
             return previousErrorContinuation.apply(null, arguments)
         }
       }
-
     }
-
 
     forStatement (node, previousContinuation, previousErrorContinuation) {
       const self = this
