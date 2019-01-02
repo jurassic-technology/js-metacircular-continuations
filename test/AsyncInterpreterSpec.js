@@ -13,6 +13,6 @@ describe('Async Interpreter Tests', function () {
   test('new expressions', './newExpressions') 
   test('conditional expressions  (ternary)', './conditionalExpressions') 
   test('unary expressions', './unaryExpressions') 
-  test.only('binary expressions', './binaryExpressions') 
+  test('binary expressions', './binaryExpressions') 
 
 })

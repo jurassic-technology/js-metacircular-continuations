@@ -1219,9 +1219,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       } else {
 
-        if (node.operator === 'typeof' &&
-            node.argunment.type === 'Identifier' &&
-            !this.has(node.argument.name)){
+        if (node.operator === 'typeof' && node.argument.type === 'Identifier' && !this.has(node.argument.name)){
 
           return previousContinuation(undefined)
 
@@ -1252,18 +1250,18 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
         else if (object) value = object[property]
 
-        if (self.operator === 'typeof') {
+        if (node.operator === 'typeof') {
 
           if (value instanceof AsyncScope) return previousContinuation('function')
           else return previousContinuation(typeof value)
 
         } 
         
-        if (self.operator === 'void') return previousContinuation(undefined)
-        else if (self.operator === '+') return previousContinuation(+value)
-        else if (self.operator === '-') return previousContinuation(-value)
-        else if (self.operator === '~') return previousContinuation(~value)
-        else if (self.operator === '!') return previousContinuation(!value)
+        if (node.operator === 'void') return previousContinuation(undefined)
+        else if (node.operator === '+') return previousContinuation(+value)
+        else if (node.operator === '-') return previousContinuation(-value)
+        else if (node.operator === '~') return previousContinuation(~value)
+        else if (node.operator === '!') return previousContinuation(!value)
 
       }
         
