@@ -179,6 +179,8 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
             return this.binaryExpression(node, previousContinuation, previousErrorContinuation)
           case 'BlockStatement':
             return this.blockStatement(node, previousContinuation, previousErrorContinuation)
+          case 'BooleanLiteral':
+            return this.booleanLiteral(node, previousContinuation, previousErrorContinuation) 
           case 'BreakStatement':
             return this.breakStatement(node, previousContinuation, previousErrorContinuation)
           case 'CallExpression':
@@ -486,7 +488,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       const self = this
 
-      return this.i(node.test, nextContTest, previousErrorContinuation)
+      return this.interpret(node.test, nextContTest, previousErrorContinuation)
 
       function nextContTest (test) {
 
