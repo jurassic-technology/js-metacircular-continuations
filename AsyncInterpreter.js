@@ -196,7 +196,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
           case 'File':
             return this.program(node.program, previousContinuation, previousErrorContinuation)
           case 'ForStatement':
-            return this.loopExpression(node, previousContinuation, previousErrorContinuation)
+            return this.forStatement(node, previousContinuation, previousErrorContinuation)
           case 'ForInStatement':
             return this.forInStatement(node, previousContinuation, previousErrorContinuation) 
           case 'ForOfStatement':
