@@ -58,5 +58,68 @@ describe('delete operator', function () {
 
 })
 
+it('unary negative sign should work', function (done) {
 
+  new AsyncInterpreter(
+    ' -55; '
+  ).evaluate().then(function (value) {
+    expect(value).to.equal(-55)
+    done()
+  }).catch(function (err) {
+    done(err)
+  })
+
+})
+
+it('bitwise NOT should work', function (done) {
+
+  new AsyncInterpreter(
+    ' ~100 '
+  ).evaluate().then(function (value) {
+    expect(value).to.equal(-101)
+    done()
+  }).catch(function (err) {
+    done(err)
+  })
+
+})
+
+it('unary negation should work', function (done) {
+
+  new  AsyncInterpreter(
+    '!0'
+  ).evaluate().then(function (value){
+    expect(value).to.be.true
+    done()
+  }).catch(function (err)  { 
+    done(err)
+  }) 
+
+})
+
+it('unary void should work', function (done) {
+
+  new  AsyncInterpreter(
+    'void 5'
+  ).evaluate().then(function (value){
+    expect(value).to.be.undefined
+    done()
+  }).catch(function (err)  { 
+    done(err)
+  }) 
+
+})
+
+it('unary typeof should work', function (done) {
+
+  new  AsyncInterpreter(
+    'typeof 5'
+  ).evaluate().then(function (value){
+    expect(value).to.equal('number') 
+    done()
+  }).catch(function (err)  { 
+    done(err)
+  }) 
+
+})
 
