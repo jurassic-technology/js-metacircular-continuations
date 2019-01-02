@@ -499,7 +499,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     }
 
-    continueStatement (node, previouscontinuation, previousErrorContinuation) {
+    continueStatement (node, previousContinuation, previousErrorContinuation) {
 
       const label = node.label ? node.label.name : undefined 
       return previousErrorContinuation('ContinueStatement', label) 
@@ -1219,7 +1219,6 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       const self = this
       let obj
 
-      console.log('wehaethaeth"')
       if (node.argument.type === 'MemberExpression') {
 
         return this.interpret(node.argument.object, nextContMemberObject, previousErrorContinuation)
@@ -1228,7 +1227,6 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
         if (node.operator === 'typeof' && node.argument.type === 'Identifier' && !this.has(node.argument.name)){
 
-          console.log('wtf') 
           return previousContinuation('undefined')
 
         } else {
@@ -1300,6 +1298,40 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       }
 
     } 
+
+
+    whileStatement (node, previousContinuation, previousErrorContinuation) {
+
+      const self = this
+      let lastResult
+
+      return this.interpret(node.test, nextContinuationTest, previousErrorContinuation)
+
+      function nextContinuationTest (test) {
+        if (test) return self.interpret(node.body, nextContinuationBody, nextErrorContinuationBody)  
+        else return previousContinuation(lastResult) 
+      }
+
+      function nextContinuationBody (result) {
+        lastResult = result
+        return self.interpret(node.test, nextContinuationTest, previousErrorContinuation) 
+      }
+
+      function nextErrorContinuationBody (errType, value, extra) {
+
+        switch (errType) {
+          case 'BreakStatement':
+            if (!value) return previousContinuation(extra ? extra : lastResult) 
+            else return previousErrorContinaution(errType, value) 
+          case 'ContinueStatement':
+            return self.interpret(node.test, nextContinuationTest, previousErrorContinuation)
+          default:
+            return previousErrorContinuation(errType, value, extra) 
+        }
+
+      }
+    }
+
 
     computeAssignmentExpression (left, right, operator) {
       switch (operator) {
