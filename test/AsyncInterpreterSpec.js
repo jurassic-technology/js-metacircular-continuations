@@ -14,5 +14,6 @@ describe('Async Interpreter Tests', function () {
   test('conditional expressions  (ternary)', './conditionalExpressions') 
   test('unary expressions', './unaryExpressions') 
   test('binary expressions', './binaryExpressions') 
+  test('do while loop', './doWhileLoop') 
 
 })

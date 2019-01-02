@@ -275,9 +275,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       function nextContLeft (left) { 
 
-        const value = this.computeAssignmentExpression(left, rightVal, node.operator)
+        const value = self.computeAssignmentExpression(left, rightVal, node.operator)
         if (value instanceof Error) return previousErrorContinuation(new Error('Invalid operator: ' + node.operator))
-        else return setValue(node.left, value, previousContinuation, previousErrorContinuation) 
+        else return self.setValue(node.left, value, previousContinuation, previousErrorContinuation) 
 
       }   
 
@@ -499,7 +499,13 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     }
 
+    continueStatement (node, previouscontinuation, previousErrorContinuation) {
 
+      const label = node.label ? node.label.name : undefined 
+      return previousErrorContinuation('ContinueStatement', label) 
+
+
+    }
 
     doWhileStatement (node, previousContinuation, previousErrorContinuation) {
 
@@ -1213,6 +1219,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       const self = this
       let obj
 
+      console.log('wehaethaeth"')
       if (node.argument.type === 'MemberExpression') {
 
         return this.interpret(node.argument.object, nextContMemberObject, previousErrorContinuation)
@@ -1221,7 +1228,8 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
         if (node.operator === 'typeof' && node.argument.type === 'Identifier' && !this.has(node.argument.name)){
 
-          return previousContinuation(undefined)
+          console.log('wtf') 
+          return previousContinuation('undefined')
 
         } else {
 
@@ -1294,7 +1302,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
     } 
 
     computeAssignmentExpression (left, right, operator) {
-      switch (node.operator) {
+      switch (operator) {
         case '+=':
           return left + right
         case '-=':
