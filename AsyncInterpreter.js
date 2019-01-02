@@ -935,14 +935,14 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
           if (prop.type === 'ObjectMethod') {
 
               el.this = object
-              const descriptor = { configurable: true }
+              const descriptor = { configurable: true, enumerable: true }
               descriptor[ prop.kind ] = function returnMethod () { return el }
               properties[ key ] = descriptor 
 
           } else {
 
             if (el[1] instanceof AsyncInterpreter) el[1].this = object
-            const descriptor = { value: el[1], enumerable: true } 
+            const descriptor = { value: el[1], enumerable: true, writable: true, configurable: true } 
             properties[ key ] = descriptor 
 
           }   
@@ -1210,11 +1210,12 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     unaryExpression (node, previousContinuation, previousErrorContinuation) {
 
+      const self = this
       let obj
 
-      if (node.argument instanceof MemberExpression) {
+      if (node.argument.type === 'MemberExpression') {
 
-        return this.interpret(node.argument, nextContMemberObject, previousErrorContinuation)
+        return this.interpret(node.argument.object, nextContMemberObject, previousErrorContinuation)
 
       } else {
 
@@ -1235,8 +1236,8 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
       function nextContMemberObject (object) {
 
         obj = object
-        if (self.argument.computed) return self.argument.property.interpret(scope, nextContComputedProperty, previousErrorContinuation)
-        else return nextContArgument(null, object, self.argument.property.name)
+        if (node.argument.computed) return self.interpret(node.argument.property, nextContComputedProperty, previousErrorContinuation)
+        else return nextContArgument(null, object, node.argument.property.name)
 
       }
 
@@ -1247,9 +1248,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
       function nextContArgument (value, object, property) {
 
-        if (object && self.operator == 'delete') return previousContinuation(delete object[property])
+        if (object && node.operator === 'delete') return previousContinuation(delete object[property])
 
-        else if (object) value = object[propertyName]
+        else if (object) value = object[property]
 
         if (self.operator === 'typeof') {
 

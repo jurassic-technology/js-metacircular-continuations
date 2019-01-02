@@ -11,6 +11,7 @@ describe('Async Interpreter Tests', function () {
   test('update expressions', './updateExpressions') 
   test('try statements', './tryStatements') 
   test('new expressions', './newExpressions') 
-  test.only('conditional expressions  (ternary)', './conditionalExpressions') 
+  test('conditional expressions  (ternary)', './conditionalExpressions') 
+  test('unary expressions', './unaryExpressions') 
 
 })
