@@ -1,4 +1,4 @@
-module.exports = function getAsyncInterpreter (AsyncScope, parse) {
+module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpression) {
 
   class AsyncInterpreter extends AsyncScope {
 
@@ -16,18 +16,23 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     } 
 
-    evaluate () {
+    evaluate (code) {
+
+      let ast
+
+      if (!code) ast = this.ast
+      if (code) ast = parse(code)
 
       const self = this
       return new Promise(function (resolve, reject) {
-        return self.interpret(self.ast, resolve, reject) 
+        return self.interpret(ast, resolve, reject) 
       }) 
 
     }
 
-    spawn (ast) {
+    spawn (ast, parent) {
 
-      const newInterpreter = new AsyncInterpreter(ast, this)
+      const newInterpreter = new AsyncInterpreter(ast, parent)
       // TODO: how to handle this keyword here?
       newInterpreter.this = this.this
       newInterpreter.boundedArgs = this.boundedArgs 
@@ -85,7 +90,6 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
     set prototype (x) { return  this._prototype = x } 
 
     call () {
-
 
       const self = this 
       const argsArray = Array.prototype.slice.call(arguments, 1, arguments.length - 2) 
@@ -384,7 +388,25 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
         } else {
 
-          if (node.callee.name === 'eval') {
+          if (node.callee.name === 'Function') {
+
+            const body = parse(argArray.pop(), { allowReturnOutsideFunction: true }) 
+
+            const params = new Array
+            for (const arg of argArray) params.push({ type: 'Identifier', name: arg }) 
+
+
+            const functionAst = new Object({
+              type: 'FunctionExpression', 
+              params: params,
+              body: body
+            })
+
+            const functionInterpreter = self.spawn(functionAst, self.getRoot()) 
+
+            return previousContinuation(functionInterpreter) 
+
+          } else if (node.callee.name === 'eval') {
 
             return self.interpretEval(argArray, previousContinuation, previousErrorContinuation)
 
@@ -735,9 +757,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     functionDeclaration (node, previousContinuation, previousErrorContinuation) {
 
-      const interp = this.spawn(node)
+      const functionInterpreter = this.spawn(node, this)
 
-      this.declare(node.id.name, interp)
+      this.declare(node.id.name, functionInterpreter)
 
       return previousContinuation(undefined) 
 
@@ -745,9 +767,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
 
     functionExpression (node, previousContinuation, previousErrorContinuation) {
 
-      const interp = this.spawn(node)
+      const functionInterpreter = this.spawn(node, this)
 
-      return previousContinuation(interp) 
+      return previousContinuation(functionInterpreter) 
 
     }
 
@@ -964,8 +986,8 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse) {
     } 
 
     objectMethod(node, previousContinuation, previousErrorContinuation) {
-      const method = this.spawn(node, this) 
-      return previousContinuation(method) 
+      const methodInterpreter = this.spawn(node, this) 
+      return previousContinuation(methodInterpreter) 
     }
 
     objectProperty (node, previousContinuation, previousErrorContinuation) {

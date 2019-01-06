@@ -184,9 +184,162 @@ describe('closures', function () {
 
       done(err)
     })
-
+  
   })
 
 
+
+  it('should be able to handle a basic closure', function (done) {
+
+    new AsyncInterpreter(
+      " var egg = function () { var squeegie = 'hawk'; return function () { return squeegie } }; var basket = egg(); basket(); "
+    ).evaluate().then(function (value) {
+      expect(value).to.equal('hawk')
+      done()
+    }).catch(function (err) {
+      done(err)
+    })
+
+  })
+
+  it('should be able to create closures with classes', function (done) {
+
+    //    function Jello () {
+    //      this.anthropocene = 2;
+    //      this.future = function () {
+    //        this.anthropocene += 36;
+    //      };
+    //      this.whodunit = function () {
+    //        return this.anthropocene;
+    //      }
+    //    }
+    //    var petri = new Jello();
+    //    petri.future();
+    //    var dish = new Jello();
+    //    dish.future();
+    //    dish.future();
+    //    return petri.whodunit() + dish.whodunit();
+    //  })()
+
+    new AsyncInterpreter(
+      " (function(){ function Jello () { this.anthropocene = 2; this.future = function () { this.anthropocene += 36; }; this.whodunit = function () { return this.anthropocene; } } var petri = new Jello(); petri.future(); var dish = new Jello(); dish.future(); dish.future(); return petri.whodunit() + dish.whodunit(); })() "
+    ).evaluate().then(function (value) {
+      expect(value).to.equal(112)
+      done()
+    }).catch(function (err) {
+      done(err)
+    })
+
+  })
+ 
+
+  it('should increment root level variable from two levels of closure nesting', function (done) {
+
+    //  (function() {
+    //    var a = 5;
+    //    function electric () {
+    //      return a
+    //    };
+    //    function eel () {
+    //      a++;
+    //      return function () {
+    //        var b = a++;
+    //        return b
+    //      };
+    //    };
+    //    var sunset = eel();
+    //    return sunset() + a + electric();
+    //  })()
+
+    new AsyncInterpreter(
+      "  (function() { var a = 5; function electric () { return a }; function eel () { a++; return function () { var b = a++; return b }; }; var sunset = eel(); return sunset() + a + electric(); })() "
+    ).evaluate().then(function (value) {
+      expect(value).to.equal(20)
+      done()
+    }).catch(function (err) {
+      done(err)
+    })
+  })
+
+
+  it('should properly evaluate independent scopes from distinct instances of a single closure', function (done) {
+
+    // function snake () {
+    //    var eggs = 0;
+    //    return function () {
+    //      return eggs++
+    //    }
+    //  };
+    //  var salad = snake();
+    //  var somberero = snake();
+    //  salad().toString()
+    //  salad().toString()
+    //  salad().toString()
+    //  sombrero().toString()
+    //  sombrero().toString()
+    //  sombrero().toString() 
+
+    new AsyncInterpreter(
+      ' function snake () { var eggs = 0; return function () { return eggs++ } }; var salad = snake(); var sombrero = snake(); salad().toString()'//+ salad().toString() + salad().toString() + sombrero().toString() + sombrero().toString() + sombrero().toString() '
+    ).evaluate().then(function (value) {
+      console.log(value.toString())
+      expect(value).to.equal('012012')
+      done()
+    }).catch(function (err) {
+      done(err)
+    })
+  })
+
+
+
+
+
+
 })
+
+
+it('should execute recursive returns correctly ', function (done) {
+  new AsyncInterpreter(
+    ' (function() { (function(){3 + 4})(); return (function() {return 5})()})() '
+  ).evaluate().then(function (value) {
+    expect(value).to.equal(5)
+    done()
+  }).catch(function (err) {
+    done(err)
+  })
+})
+
+it('should execute immediately invoking function expression returning a string', function (done) {
+
+  new AsyncInterpreter(
+    ' (function() { return "screw" })() '
+  ).evaluate().then(function (value) {
+    expect(value).to.equal('screw')
+    done()
+  }).catch(function (err) {
+    done(err)
+  })
+
+})
+
+
+describe('capital F Functions', function (){
+
+  it.only('should compile and run a function created with the capital F Function primordial', function (done) {
+
+    new AsyncInterpreter(
+      ' var a = 5; var b = Function("return a"); b() ' 
+    ).evaluate().then(function (value) {
+      expect(value).to.equal(5)
+      done()
+    }).catch(function (err) {
+      done(err) 
+    })
+
+
+  }) 
+
+})
+
+
 

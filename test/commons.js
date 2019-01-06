@@ -1,10 +1,16 @@
 const chai = require('chai')
-const parser = require('@babel/parser').parse
+const parse = require('@babel/parser').parse
+const parseExpression = require('@babel/parser').parseExpression
 
 class AsyncScope extends Map {
   constructor (parent) { 
     super()
     this.parent = parent
+  }
+
+  getRoot () {
+    if (this.parent) return this.parent.getRoot()
+    return this 
   }
 
   has (name) {
@@ -31,7 +37,7 @@ class AsyncScope extends Map {
 
 }
 
-const AsyncInterpreter = require('../AsyncInterpreter')(AsyncScope, parser) 
+const AsyncInterpreter = require('../AsyncInterpreter')(AsyncScope, parse, parseExpression) 
 
 module.exports.AsyncInterpreter = AsyncInterpreter
 module.exports.chai = chai
