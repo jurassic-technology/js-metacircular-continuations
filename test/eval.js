@@ -3,7 +3,7 @@ const AsyncInterpreter = commons.AsyncInterpreter
 const expect = commons.expect 
 
 
-it.only('should eval a simple arithmetic expression', function (done) {
+it('should eval a simple arithmetic expression', function (done) {
   
   new AsyncInterpreter(
     'eval("2+3") '
@@ -17,7 +17,7 @@ it.only('should eval a simple arithmetic expression', function (done) {
 })
 
 
-it.only('eval should be able to call function in current level scope', function (done) {
+it('eval should be able to call function in current level scope', function (done) {
 
   new AsyncInterpreter(
     ' function a () { return 5 }; eval("a()"); '
@@ -32,7 +32,7 @@ it.only('eval should be able to call function in current level scope', function 
 }) 
 
 
-it.only('initiating a variable to eval and then using it should work', function (done) {
+it('initiating a variable to eval and then using it should work', function (done) {
 
   new AsyncInterpreter(
     ' var a = eval; a("2+3"); '
@@ -46,7 +46,7 @@ it.only('initiating a variable to eval and then using it should work', function 
 })
 
 
-it.only('initiating a variable to eval and trying to access a nested scope should fail', function (done) {
+it('initiating a variable to eval and trying to access a nested scope should fail', function (done) {
 
   new AsyncInterpreter(
     ' function z () { var a = eval; var b = 5; return a("b"); } z(); '
