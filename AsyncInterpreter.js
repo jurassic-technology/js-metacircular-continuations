@@ -6,7 +6,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
       super(parent) 
 
-      if (typeof code === 'string') this.ast = parse(code)
+      if (typeof code === 'string') this.ast = parse(code, { strictMode: true })
       else this.ast = code 
 
       if (this.ast.id) this.declare(this.ast.id.name, this) 
@@ -21,7 +21,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
       let ast
 
       if (!code) ast = this.ast
-      if (code) ast = parse(code)
+      if (code) ast = parse(code, { strictMode: true })
 
       const self = this
       return new Promise(function (resolve, reject) {
@@ -37,6 +37,14 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
       newInterpreter.this = this.this
       newInterpreter.boundedArgs = this.boundedArgs 
       return newInterpreter
+
+    } 
+
+    eval (code, previousContinuation, previousErrorContinuation) {
+      
+      const ast = parseExpression(code, { strictMode: true }) 
+
+      return this.interpret(ast, previousContinuation, previousErrorContinuation) 
 
     } 
 
@@ -267,7 +275,14 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
       const self = this
       let rightVal
 
-      return this.interpret(node.right, nextContinuationRight, previousErrorContinuation) 
+      if (node.right.type === 'Identifier' && node.right.name === 'eval') {
+
+        rightVal = this.getRoot().eval 
+        return this.interpret(node.left, nextContinuationLeft, previousErrorContinuation) 
+
+      }
+
+      else return this.interpret(node.right, nextContinuationRight, previousErrorContinuation) 
 
       function nextContinuationRight (right) {
 
@@ -390,11 +405,10 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
           if (node.callee.name === 'Function') {
 
-            const body = parse(argArray.pop(), { allowReturnOutsideFunction: true }) 
+            const body = parse(argArray.pop(), { strictMode: true, allowReturnOutsideFunction: true }) 
 
             const params = new Array
             for (const arg of argArray) params.push({ type: 'Identifier', name: arg }) 
-
 
             const functionAst = new Object({
               type: 'FunctionExpression', 
@@ -408,10 +422,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
           } else if (node.callee.name === 'eval') {
 
-            return self.interpretEval(argArray, previousContinuation, previousErrorContinuation)
+            return self.eval(argArray[0], previousContinuation, previousErrorContinuation)
 
           } else {
-
 
             return self.interpret(node.callee, nextContinuationCallee, previousErrorContinuation)
 
@@ -429,12 +442,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
       }   
 
-
-
       function nextContinuationComputed (prop) {
         return performCall(obj, prop) 
       }   
-
 
       function performCall (object, prop) {
 
@@ -482,8 +492,10 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
       }
 
       function nextContinuationCallee (callee) {
-        
-        if (callee instanceof AsyncInterpreter) {
+
+        if (callee === self.eval) {
+          return self.getRoot().eval(args[0], previousContinuation, previousErrorContinuation) 
+        } else if (callee instanceof AsyncInterpreter) {
           return callee.execute(args, previousContinuation, previousErrorContinuation) 
         } else {
           return previousErrorContinuation('TypeError', node.callee.name + ' is not a function.') 
@@ -1020,6 +1032,11 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
       }
 
       function nextErrorContinuation (errorType, result){ 
+
+        // important in the case of calls to Function and 
+        // to handle exceptions from their program level block 
+        if (errorType instanceof Error) return previousErrorContinuation(errorType) 
+
         switch (errorType) {
           case 'ReturnStatement':
             return previousContinuation(result) 
@@ -1310,7 +1327,14 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
       
       const self = this
 
-      if (node.init) return this.interpret(node.init, nextContinuation, previousErrorContinuation) 
+      if (node.init) {
+
+       if (node.init.type === 'Identifier' && node.init.name === 'eval') {
+         return nextContinuation(this.getRoot().eval) 
+       } 
+       else return this.interpret(node.init, nextContinuation, previousErrorContinuation)  
+
+      }
       else return nextContinuation(undefined)
 
       function nextContinuation (value) {

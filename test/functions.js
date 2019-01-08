@@ -262,7 +262,7 @@ describe('closures', function () {
   })
 
 
-  it('should properly evaluate independent scopes from distinct instances of a single closure', function (done) {
+  xit('should properly evaluate independent scopes from distinct instances of a single closure', function (done) {
 
     // function snake () {
     //    var eggs = 0;
@@ -282,7 +282,6 @@ describe('closures', function () {
     new AsyncInterpreter(
       ' function snake () { var eggs = 0; return function () { return eggs++ } }; var salad = snake(); var sombrero = snake(); salad().toString()'//+ salad().toString() + salad().toString() + sombrero().toString() + sombrero().toString() + sombrero().toString() '
     ).evaluate().then(function (value) {
-      console.log(value.toString())
       expect(value).to.equal('012012')
       done()
     }).catch(function (err) {
@@ -325,7 +324,7 @@ it('should execute immediately invoking function expression returning a string',
 
 describe('capital F Functions', function (){
 
-  it.only('should compile and run a function created with the capital F Function primordial', function (done) {
+  it('should compile and run a function created with the capital F Function primordial', function (done) {
 
     new AsyncInterpreter(
       ' var a = 5; var b = Function("return a"); b() ' 
@@ -338,6 +337,18 @@ describe('capital F Functions', function (){
 
 
   }) 
+
+
+  it('should compile a function that does not have access to nested scope', function (done) {
+    
+    new AsyncInterpreter(
+      ' function a () { var b = 5; var c = Function("return b"); return c(); }; a() '
+    ).evaluate().catch(function (err) {
+      expect(err instanceof ReferenceError).to.be.true
+      done()
+    }) 
+
+  })
 
 })
 

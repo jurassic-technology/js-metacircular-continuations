@@ -19,5 +19,6 @@ describe('Async Interpreter Tests', function () {
   test('for in loops', './forInLoops') 
   test('for of loops', './forOfLoops') 
   test('for loops', './forLoops')
+  test('eval function', './eval') 
 
 })
