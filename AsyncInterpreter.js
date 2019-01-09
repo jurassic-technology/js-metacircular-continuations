@@ -1,5 +1,7 @@
 module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpression) {
 
+  const evalSymbol = Symbol('eval') 
+
   class AsyncInterpreter extends AsyncScope {
 
     constructor (code, parent) {
@@ -277,7 +279,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
       if (node.right.type === 'Identifier' && node.right.name === 'eval') {
 
-        rightVal = this.getRoot().eval 
+        rightVal = evalSymbol
         return this.interpret(node.left, nextContinuationLeft, previousErrorContinuation) 
 
       }
@@ -493,7 +495,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
       function nextContinuationCallee (callee) {
 
-        if (callee === self.eval) {
+        if (callee === evalSymbol) {
           return self.getRoot().eval(args[0], previousContinuation, previousErrorContinuation) 
         } else if (callee instanceof AsyncInterpreter) {
           return callee.execute(args, previousContinuation, previousErrorContinuation) 
@@ -1329,12 +1331,11 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
       if (node.init) {
 
-       if (node.init.type === 'Identifier' && node.init.name === 'eval') {
-         return nextContinuation(this.getRoot().eval) 
-       } 
+       if (node.init.type === 'Identifier' && node.init.name === 'eval') return nextContinuation(evalSymbol) 
        else return this.interpret(node.init, nextContinuation, previousErrorContinuation)  
 
       }
+
       else return nextContinuation(undefined)
 
       function nextContinuation (value) {
