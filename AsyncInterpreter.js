@@ -42,11 +42,22 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
     } 
 
-    eval (code, previousContinuation, previousErrorContinuation) {
+    eval (scope, code, previousContinuation, previousErrorContinuation) {
       
+      const self = this, previousScope = this.scope
+
       const ast = parseExpression(code, { strictMode: true }) 
 
-      return this.interpret(ast, previousContinuation, previousErrorContinuation) 
+      this.scope = scope 
+
+      return this.interpret(ast, nextContinuationPopScope, previousErrorContinuation) 
+
+      function nextContinuationPopScope (result) {
+
+        self.scope = previousScope 
+        return previousContinuation(result) 
+
+      }
 
     } 
 
@@ -277,14 +288,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
       const self = this
       let rightVal
 
-      if (node.right.type === 'Identifier' && node.right.name === 'eval') {
-
-        rightVal = evalSymbol
-        return this.interpret(node.left, nextContinuationLeft, previousErrorContinuation) 
-
-      }
-
-      else return this.interpret(node.right, nextContinuationRight, previousErrorContinuation) 
+      return this.interpret(node.right, nextContinuationRight, previousErrorContinuation) 
 
       function nextContinuationRight (right) {
 
@@ -424,7 +428,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
           } else if (node.callee.name === 'eval') {
 
-            return self.eval(argArray[0], previousContinuation, previousErrorContinuation)
+            return self.eval(self.scope, argArray[0], previousContinuation, previousErrorContinuation)
 
           } else {
 
@@ -483,33 +487,25 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
           }
 
-
         } else {
 
           return nextContinuationCallee(object[node.callee.property.name], object) 
 
         } 
 
-
       }
 
       function nextContinuationCallee (callee) {
 
-        if (callee === evalSymbol) {
-          return self.scope.getRoot().eval(args[0], previousContinuation, previousErrorContinuation) 
-        } else if (callee instanceof AsyncInterpreter) {
+        if (callee instanceof AsyncInterpreter) {
           return callee.execute(args, previousContinuation, previousErrorContinuation) 
+        } else if (typeof callee === 'function') {
+          return callee(args[0], previousContinuation, previousErrorContinuation) 
         } else {
           return previousErrorContinuation('TypeError', node.callee.name + ' is not a function.') 
-        }   
+        } 
 
       }   
-
-
-      function executeApplyBindOrCall (kind) {
-        argsArray.push(previousContinuation, previousErrorContinuation) 
-        return object[kind].apply(object, args)
-      }
 
     }
 
@@ -792,7 +788,10 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
       if (node.name === 'undefined') return this.resolveValue(undefined, previousContinuation, previousErrorContinuation)
 
-      if (node.name === 'eval') { } 
+      if (node.name === 'eval') { 
+        const evalFunction = this.eval.bind(this, this.scope.getRoot()) 
+        return this.resolveValue(evalFunction, previousContinuation, previousErrorContinuation)
+      } 
 
       if (this.scope.has(node.name)) return this.resolveValue(this.scope.get(node.name), previousContinuation, previousErrorContinuation)
 
@@ -1329,12 +1328,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
       
       const self = this
 
-      if (node.init) {
-
-       if (node.init.type === 'Identifier' && node.init.name === 'eval') return nextContinuation(evalSymbol) 
-       else return this.interpret(node.init, nextContinuation, previousErrorContinuation)  
-
-      }
+      if (node.init) return this.interpret(node.init, nextContinuation, previousErrorContinuation)  
 
       else return nextContinuation(undefined)
 
