@@ -13,9 +13,13 @@ class AsyncScope extends Map {
     return this 
   }
 
+  getParent () {
+    return this.parent 
+  }
+
   has (name) {
     if (super.has(name)) return true
-    else if (this.parent) return this.parent.has(name)
+    else if (this.parent) return this.parent.has(name) 
     else return false 
   }
 

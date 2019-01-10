@@ -2,16 +2,16 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
   const evalSymbol = Symbol('eval') 
 
-  class AsyncInterpreter extends AsyncScope {
+  class AsyncInterpreter {
 
     constructor (code, parent) {
 
-      super(parent) 
+      this.scope = new AsyncScope(parent)
 
       if (typeof code === 'string') this.ast = parse(code, { strictMode: true })
       else this.ast = code 
 
-      if (this.ast.id) this.declare(this.ast.id.name, this) 
+      if (this.ast.id) this.scope.declare(this.ast.id.name, this) 
         
       this.this = undefined
       this.prototype = new Object 
@@ -63,23 +63,23 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
           : args
         : args
 
-      const execution = new AsyncInterpreter(this.ast, this.parent) 
+      const execution = new AsyncInterpreter(this.ast, this.scope.getParent()) 
       execution.boundedArgs = this.boundedArgs
       execution.this = this.this 
 
       if (this.ast.param) { // it's a catch block
-        execution.declare(this.ast.param.name, args[0]) 
+        execution.scope.declare(this.ast.param.name, args[0]) 
       } else {
         for (var i = 0; i < iterateArgs.length; i++) {
           if (this.ast.params[i]) {
-            execution.declare(this.ast.params[i].name, iterateArgs[i])
+            execution.scope.declare(this.ast.params[i].name, iterateArgs[i])
           }
           argsObject[i] = iterateArgs[i]
         } 
 
         Object.defineProperty(argsObject, 'length', { value: iterateArgs.length, enumerable: false }) 
         Object.defineProperty(argsObject, 'callee', { value: this.callee, enumerable: false }) 
-        execution.declare('arguments', argsObject) 
+        execution.scope.declare('arguments', argsObject) 
 
       } 
 
@@ -135,7 +135,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
    
     bind () { 
 
-      const interpreter = new AsyncInterpreter(this.ast) 
+      const interpreter = new AsyncInterpreter(this.ast, this.scope.getParent()) 
       interpreter.this = arguments[0]
       interpreter.boundedArgs = this.boundedArgs 
         ? this.boundedArgs.concat(Array.prototype.slice.call(arguments, 1))
@@ -418,7 +418,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
               body: body
             })
 
-            const functionInterpreter = self.spawn(functionAst, self.getRoot()) 
+            const functionInterpreter = self.spawn(functionAst, self.scope.getRoot()) 
 
             return previousContinuation(functionInterpreter) 
 
@@ -496,7 +496,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
       function nextContinuationCallee (callee) {
 
         if (callee === evalSymbol) {
-          return self.getRoot().eval(args[0], previousContinuation, previousErrorContinuation) 
+          return self.scope.getRoot().eval(args[0], previousContinuation, previousErrorContinuation) 
         } else if (callee instanceof AsyncInterpreter) {
           return callee.execute(args, previousContinuation, previousErrorContinuation) 
         } else {
@@ -603,7 +603,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
         ? node.left.declarations[0].id
         : node.left
 
-      self.declare(left.name, undefined)
+      self.scope.declare(left.name, undefined)
 
       return self.interpret(node.right, nextContinuationRight, previousErrorContinuation)
 
@@ -665,7 +665,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
         ? node.left.declarations[0].id
         : node.left
 
-      self.declare(left.name, undefined)
+      self.scope.declare(left.name, undefined)
 
       return self.interpret(node.right, nextContinuationRight, previousErrorContinuation)
 
@@ -771,9 +771,9 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
     functionDeclaration (node, previousContinuation, previousErrorContinuation) {
 
-      const functionInterpreter = this.spawn(node, this)
+      const functionInterpreter = this.spawn(node, this.scope)
 
-      this.declare(node.id.name, functionInterpreter)
+      this.scope.declare(node.id.name, functionInterpreter)
 
       return previousContinuation(undefined) 
 
@@ -781,7 +781,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
     functionExpression (node, previousContinuation, previousErrorContinuation) {
 
-      const functionInterpreter = this.spawn(node, this)
+      const functionInterpreter = this.spawn(node, this.scope)
 
       return previousContinuation(functionInterpreter) 
 
@@ -794,7 +794,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
       if (node.name === 'eval') { } 
 
-      if (this.has(node.name)) return this.resolveValue(this.get(node.name), previousContinuation, previousErrorContinuation)
+      if (this.scope.has(node.name)) return this.resolveValue(this.scope.get(node.name), previousContinuation, previousErrorContinuation)
 
       return previousErrorContinuation('ReferenceError', new ReferenceError(node.name + ' is not declared.'))
 
@@ -1186,7 +1186,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
         if (handler) {
           
-          if (!self.has(handler.param.name)) self.declare(handler.param.name, error) 
+          if (!self.scope.has(handler.param.name)) self.scope.declare(handler.param.name, error) 
           else {
             hadPreviousParamValue = true
             previousParamValue = self.get(handler.param.name) 
@@ -1206,7 +1206,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
       function nextContinuationCatch (value, isReturn) {
 
         if (hadPreviousParamValue) self.set(handler.param.name, previousParamValue) 
-        else self.delete(handler.param.name) 
+        else self.scope.delete(handler.param.name) 
 
         if (isReturn) return previousErrorContinuation('ReturnStatement', value)
 
@@ -1267,7 +1267,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
       } else {
 
-        if (node.operator === 'typeof' && node.argument.type === 'Identifier' && !this.has(node.argument.name)){
+        if (node.operator === 'typeof' && node.argument.type === 'Identifier' && !this.scope.has(node.argument.name)){
 
           return previousContinuation('undefined')
 
@@ -1340,7 +1340,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
       function nextContinuation (value) {
 
-        self.declare(node.id.name, value) 
+        self.scope.declare(node.id.name, value) 
         return previousContinuation(undefined)
 
       }
@@ -1472,7 +1472,7 @@ module.exports = function getAsyncInterpreter (AsyncScope, parse, parseExpressio
 
       if (node.type === 'Identifier') {
 
-        var success = this.set(node.name, value)
+        var success = this.scope.set(node.name, value)
         if (!success) return previousErrorContinuation("ReferenceError", new ReferenceError())
         else return previousContinuation(value)
 

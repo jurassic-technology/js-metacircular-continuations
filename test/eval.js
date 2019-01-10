@@ -32,7 +32,7 @@ it('eval should be able to call function in current level scope', function (done
 }) 
 
 
-it('initiating a variable to eval and then using it should work', function (done) {
+xit('initiating a variable to eval and then using it should work', function (done) {
 
   new AsyncInterpreter(
     ' var a = eval; a("2+3"); '
@@ -46,7 +46,7 @@ it('initiating a variable to eval and then using it should work', function (done
 })
 
 
-it('initiating a variable to eval and trying to access a nested scope should fail', function (done) {
+xit('initiating a variable to eval and trying to access a nested scope should fail', function (done) {
 
   new AsyncInterpreter(
     ' function z () { var a = eval; var b = 5; return a("b"); } z(); '
